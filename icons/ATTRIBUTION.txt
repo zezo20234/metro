@@ -1,0 +1,4 @@
+App icon photo: "KAFD metro station" by Francisco Anzola.
+Source: https://commons.wikimedia.org/wiki/File:KAFD_metro_station_2025.jpg
+License: Creative Commons Attribution 2.0 — https://creativecommons.org/licenses/by/2.0/
+Changes: cropped to square and resized for app icons.
