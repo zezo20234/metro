@@ -320,6 +320,8 @@
                 Plan Route
             </button>
 
+            <div id="plan-results" class="hidden space-y-2"></div>
+
             <button id="plan-pdf-btn" class="hidden w-full px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold transition shadow-sm">
                 ⬇ Download PDF Directions
             </button>
@@ -2207,7 +2209,11 @@
             const totalTime = bestT + transfers * 240;
             const totalKm = legs.reduce((a, l) => a + l.km, 0);
             const walkKm = legs.filter(l => l.type === 'walk').reduce((a, l) => a + l.km, 0);
-            return { mode: 'metro', legs, timeSec: totalTime, km: totalKm, walkKm, transfers };
+            const usedLines = [...new Set(legs.filter(l => l.type === 'ride').map(l => l.line))];
+            return {
+                mode: 'metro', legs, timeSec: totalTime, km: totalKm, walkKm, transfers,
+                board: firstSt, alight: lastSt, lines: usedLines
+            };
         }
 
         // Bus stops indexed by route number
@@ -2284,6 +2290,16 @@
             return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
         }
         function fmtKm(km) { return km < 10 ? km.toFixed(1) : Math.round(km) + ''; }
+        function fmtDist(km) { return km < 1 ? Math.max(50, Math.round(km * 1000)) + ' m' : fmtKm(km) + ' km'; }
+
+        function nearestStationTo(point) {
+            let best = null, bestKm = Infinity;
+            ALL_STATIONS.forEach(s => {
+                const d = haversineKm(point.lat, point.lng, s.lat, s.lng);
+                if (d < bestKm) { bestKm = d; best = s; }
+            });
+            return best ? { station: best, km: bestKm } : null;
+        }
 
         function computeBestPlan(from, to) {
             const options = [walkPlan(from, to)];
@@ -2349,12 +2365,37 @@
             const res = document.getElementById('plan-results');
             const b = plan.best;
             const modeLabel = { metro: '🚇 Metro', bus: '🚌 Bus', walk: '🚶 Walk' }[b.mode];
-            let html = `
+
+            let boardText = 'Walking only — no metro or bus ride needed';
+            if (b.mode === 'metro' && b.board && b.alight && b.lines && b.lines.length) {
+                const lineNames = (b.lines || []).map(id => METRO_LINES[id].shortName).join(' → ');
+                boardText = `Board at <b>${b.board.name}</b> • ${lineNames} • Get off at <b>${b.alight.name}</b>`;
+            } else if (b.mode === 'bus' && b.board && b.alight) {
+                const busLeg = b.legs.find(l => l.type === 'bus');
+                const route = busLeg ? `BUS ${busLeg.route}` : 'bus';
+                boardText = `Board ${route} at <b>${b.board.name}</b> • Get off at <b>${b.alight.name}</b>`;
+            }
+
+            const fromMetro = nearestStationTo(plan._from);
+            const toMetro = nearestStationTo(plan._to);
+            let html = '';
+            if (fromMetro && toMetro) {
+                html += `
+                    <div class="rounded-xl bg-sky-50 border border-sky-200 p-2.5 space-y-1">
+                        <div class="text-[10px] font-extrabold uppercase tracking-wide text-sky-800">Closest metro</div>
+                        <div class="text-[11px] text-slate-700"><span class="font-extrabold text-slate-500">From area:</span> ${fromMetro.station.name} • ${fmtDist(fromMetro.km)}</div>
+                        <div class="text-[11px] text-slate-700"><span class="font-extrabold text-slate-500">To area:</span> ${toMetro.station.name} • ${fmtDist(toMetro.km)}</div>
+                    </div>
+                `;
+            }
+
+            html += `
                 <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 space-y-1.5">
                     <div class="flex items-center justify-between">
                         <span class="text-[11px] font-extrabold text-emerald-800">${modeLabel} • ${fmtTime(b.timeSec)}</span>
                         <span class="text-[10px] text-emerald-600 font-semibold">${fmtKm(b.km)} km • ${fmtKm(b.walkKm)} km walking</span>
                     </div>
+                    <div class="text-[11px] font-bold text-slate-800">${boardText}</div>
                     <ol class="space-y-1">
             `;
             b.legs.forEach((l, i) => {
@@ -2370,6 +2411,7 @@
                 });
             }
             res.innerHTML = html;
+            res.classList.remove('hidden');
             document.getElementById('plan-pdf-btn').classList.remove('hidden');
         }
 
@@ -2423,8 +2465,18 @@
             body.push(`From: ${f.name}`);
             body.push(`To:   ${t.name}`);
             body.push(`Date: ${new Date().toLocaleString()}`);
+            const fromMetroPdf = nearestStationTo(f);
+            const toMetroPdf = nearestStationTo(t);
+            if (fromMetroPdf && toMetroPdf) {
+                body.push(`Closest metro from: ${fromMetroPdf.station.name} (${fmtDist(fromMetroPdf.km)})`);
+                body.push(`Closest metro to:   ${toMetroPdf.station.name} (${fmtDist(toMetroPdf.km)})`);
+            }
             body.push('');
             body.push(`RECOMMENDED ROUTE — ${fmtTime(b.timeSec)} total, ${fmtKm(b.km)} km (${fmtKm(b.walkKm)} km walking)`);
+            if (b.board && b.alight) {
+                body.push(`Board at: ${b.board.name}`);
+                body.push(`Get off at: ${b.alight.name}`);
+            }
             body.push('');
             b.legs.forEach((l, i) => {
                 wrapPdf(`${i + 1}. ${legText(l)}`, 95).forEach(w => body.push('   ' + w));
@@ -2475,6 +2527,9 @@
             });
         });
         document.getElementById('plan-go-btn').addEventListener('click', () => {
+            lastPlan = null;
+            document.getElementById('plan-results').classList.add('hidden');
+            document.getElementById('plan-pdf-btn').classList.add('hidden');
             const f = resolveEndpoint(document.getElementById('plan-from-input').value, planFromData);
             const t = resolveEndpoint(document.getElementById('plan-to-input').value, planToData);
             if (!f || !t) { showToast('Pick From and To from the suggestions'); return; }
