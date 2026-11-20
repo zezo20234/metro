@@ -127,6 +127,24 @@
         body.map-picking #map {
             cursor: crosshair;
         }
+        #transit-dock {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            transition: transform 0.25s ease;
+        }
+        #transit-dock.dock-hidden {
+            transform: translateY(110%);
+        }
+        #dock-show-btn {
+            bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        }
+        @media (min-width: 640px) {
+            #transit-dock {
+                padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+            }
+            #dock-show-btn {
+                display: none !important;
+            }
+        }
         .plan-pick-marker {
             width: 22px;
             height: 22px;
@@ -331,9 +349,18 @@
     <!-- ======================================================================= -->
     <!-- FLOATING BOTTOM TRANSIT DOCK (2 MAIN TOGGLES + SINGLE COLOR ISOLATOR)   -->
     <!-- ======================================================================= -->
-    <footer class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none px-3 pb-3 sm:px-4 sm:pb-5">
+    <footer id="transit-dock" class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none px-3 pb-3 sm:px-4 sm:pb-5">
         <div class="max-w-lg mx-auto sm:mx-0 pointer-events-auto bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-900/15 border border-slate-200/90 p-3 space-y-2.5">
-            
+
+            <!-- Mobile-only compact controls header -->
+            <div class="sm:hidden flex items-center justify-between px-1">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Transit controls</span>
+                <div class="flex items-center gap-1.5">
+                    <button id="dock-details-btn" type="button" class="text-[10px] font-extrabold text-sky-700 px-2 py-1 rounded-lg bg-sky-50 border border-sky-200">Filters</button>
+                    <button id="dock-hide-btn" type="button" class="text-[10px] font-extrabold text-slate-600 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200">Hide</button>
+                </div>
+            </div>
+
             <!-- TWO PRIMARY NETWORK TOGGLE BUTTONS -->
             <div class="grid grid-cols-2 gap-2">
                 <!-- Button 1: Metro Lines -->
@@ -355,6 +382,8 @@
                 </button>
             </div>
 
+            <!-- COLLAPSIBLE FILTER DETAILS (compact on iPhone) -->
+            <div id="transit-dock-details" class="hidden sm:block space-y-2.5">
             <!-- SINGLE-COLOR METRO LINE ISOLATOR PILL BAR -->
             <div id="metro-color-dock" class="space-y-1.5">
                 <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
@@ -404,9 +433,15 @@
                     <option value="ALL">Show all routes</option>
                 </select>
             </div>
+            </div>
 
         </div>
     </footer>
+
+    <!-- Reopen transit dock on small screens -->
+    <button id="dock-show-btn" type="button" class="hidden fixed left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-slate-900/95 text-white text-[10px] font-extrabold shadow-2xl border border-white/10">
+        🚌 🚇 Transit
+    </button>
 
     <!-- Toast Notification Pill -->
     <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xl pointer-events-none">
@@ -1812,6 +1847,22 @@
         });
         setBusFilter('ALL');
 
+        // iPhone compact mode: filters are hidden until the user opens them
+        const dockDetailsBtn = document.getElementById('dock-details-btn');
+        const dockDetails = document.getElementById('transit-dock-details');
+        dockDetailsBtn.addEventListener('click', () => {
+            const isHidden = dockDetails.classList.toggle('hidden');
+            dockDetailsBtn.textContent = isHidden ? 'Filters' : 'Hide';
+        });
+        document.getElementById('dock-hide-btn').addEventListener('click', () => {
+            document.getElementById('transit-dock').classList.add('dock-hidden');
+            document.getElementById('dock-show-btn').classList.remove('hidden');
+        });
+        document.getElementById('dock-show-btn').addEventListener('click', () => {
+            document.getElementById('transit-dock').classList.remove('dock-hidden');
+            document.getElementById('dock-show-btn').classList.add('hidden');
+        });
+
         // =========================================================================
         // 10. TRIP PLANNER — From/To search, fastest+least-walking router, PDF
         // =========================================================================
@@ -2576,13 +2627,19 @@
         const UPDATE_DISMISS_KEY = 'riyadhTransitUpdateDismissed';
         const updateBanner = document.getElementById('update-banner');
         let pendingAppVersion = null;
+        let swRegistration = null;
+        let swUpdatePending = false;
 
         function showUpdateBanner(version) {
-            pendingAppVersion = version;
+            if (version) pendingAppVersion = version;
             updateBanner.classList.remove('hidden');
         }
 
         async function checkAppVersion() {
+            try {
+                const reg = swRegistration || await navigator.serviceWorker.getRegistration();
+                if (reg) await reg.update();
+            } catch (e) { /* service worker update check is best-effort */ }
             try {
                 const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
                 if (!res.ok) return;
@@ -2602,15 +2659,28 @@
 
         document.getElementById('update-later-btn').addEventListener('click', () => {
             if (pendingAppVersion) sessionStorage.setItem(UPDATE_DISMISS_KEY, pendingAppVersion);
+            swUpdatePending = false;
             updateBanner.classList.add('hidden');
         });
 
         document.getElementById('update-now-btn').addEventListener('click', async () => {
-            if (pendingAppVersion) localStorage.setItem(APP_VERSION_KEY, pendingAppVersion);
-            try {
-                const reg = await navigator.serviceWorker.getRegistration();
-                if (reg) await reg.update();
-            } catch (e) { /* reload still works */ }
+            if (pendingAppVersion) {
+                localStorage.setItem(APP_VERSION_KEY, pendingAppVersion);
+                pendingAppVersion = null;
+            }
+            if (swUpdatePending && swRegistration && swRegistration.waiting) {
+                swUpdatePending = false;
+                await new Promise(resolve => {
+                    navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+                    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    setTimeout(resolve, 2500);
+                });
+            } else {
+                try {
+                    const reg = swRegistration || await navigator.serviceWorker.getRegistration();
+                    if (reg) await reg.update();
+                } catch (e) { /* reload still works */ }
+            }
             location.reload();
         });
 
@@ -2626,7 +2696,19 @@
         if ('serviceWorker' in navigator &&
             (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(() => {});
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    swRegistration = reg;
+                    reg.addEventListener('updatefound', () => {
+                        const worker = reg.installing;
+                        if (!worker) return;
+                        worker.addEventListener('statechange', () => {
+                            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                                swUpdatePending = true;
+                                showUpdateBanner();
+                            }
+                        });
+                    });
+                }).catch(() => {});
             });
         }
     </script>

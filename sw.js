@@ -1,7 +1,7 @@
 /* Riyadh Metro & Bus Explorer — Service Worker
    Offline-first: caches the app shell, libraries, fonts and all Riyadh map tiles. */
 
-const VERSION = 'v9';
+const VERSION = 'v13';
 const SHELL_CACHE = 'riyadh-shell-' + VERSION;
 const RUNTIME_CACHE = 'riyadh-runtime-' + VERSION;
 const TILE_CACHE = 'riyadh-tiles-' + VERSION;
@@ -40,8 +40,7 @@ self.addEventListener('install', (event) => {
           fetch(u).then(r => { if (r.ok) return cache.put(u, r); })
         )
       ))
-      .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting())
+      .catch(() => {})
   );
 });
 
@@ -52,8 +51,13 @@ self.addEventListener('activate', (event) => {
         .filter(k => ![SHELL_CACHE, RUNTIME_CACHE, TILE_CACHE].includes(k))
         .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
-      .then(() => warmTiles())
+      .then(() => { warmTiles(); })
   );
+});
+
+// Let the page ask a waiting update to activate after the user taps Update.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 // Background warm-up: download every Riyadh tile once, in small batches.
