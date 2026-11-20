@@ -210,19 +210,19 @@
                     All Places
                 </button>
                 <button data-cat="Mall" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    🛍️ Malls
+                    Malls
                 </button>
                 <button data-cat="Landmark" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    🎡 Landmarks
+                    Landmarks
                 </button>
                 <button data-cat="District" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    📍 Districts
+                    Districts
                 </button>
                 <button data-cat="University" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    🎓 Universities
+                    Universities
                 </button>
                 <button data-cat="Hospital" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    🏥 Hospitals
+                    Hospitals
                 </button>
                 <button data-cat="NONE" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-500 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
                     Hide Pins
@@ -268,7 +268,7 @@
     <section id="planner-panel" class="hidden fixed left-3 right-3 sm:left-auto sm:right-4 sm:w-[400px] bottom-3 sm:bottom-4 z-40 bg-white/98 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-900/20 border border-slate-200/90 p-4 max-h-[72vh] overflow-y-auto">
         <div class="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
             <div>
-                <h2 class="font-extrabold text-slate-900 text-sm">🧭 Trip Planner</h2>
+                <h2 class="font-extrabold text-slate-900 text-sm">Trip Planner</h2>
                 <p class="text-[10px] text-slate-400">Fastest route with least walking</p>
             </div>
             <button id="plan-close-btn" class="p-1.5 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition" title="Close">
@@ -323,7 +323,7 @@
 
             <div class="rounded-2xl border border-amber-200 bg-amber-50/80 p-2.5 space-y-2">
                 <div class="flex items-center justify-between gap-2">
-                    <span class="text-[11px] font-extrabold text-amber-900">🏠 Saved Home</span>
+                    <span class="text-[11px] font-extrabold text-amber-900">Saved Home</span>
                     <span id="plan-home-status" class="text-[10px] font-semibold text-amber-700">Loading…</span>
                 </div>
                 <div class="grid grid-cols-3 gap-1.5">
@@ -341,7 +341,7 @@
             <div id="plan-results" class="hidden space-y-2"></div>
 
             <button id="plan-pdf-btn" class="hidden w-full px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold transition shadow-sm">
-                ⬇ Download PDF Directions
+                Download PDF Directions
             </button>
         </div>
     </section>
@@ -366,7 +366,7 @@
                 <!-- Button 1: Metro Lines -->
                 <button id="btn-toggle-metro" class="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-900 text-white font-bold text-xs sm:text-sm shadow-sm transition-all">
                     <span class="flex items-center gap-2">
-                        <span class="text-base">🚇</span>
+                        <span class="text-base">Metro</span>
                         <span>Metro Lines</span>
                     </span>
                     <span id="metro-switch-pill" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-white">ON</span>
@@ -375,7 +375,7 @@
                 <!-- Button 2: Bus Lines -->
                 <button id="btn-toggle-bus" class="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold text-xs sm:text-sm border border-slate-200/80 transition-all">
                     <span class="flex items-center gap-2">
-                        <span class="text-base">🚌</span>
+                        <span class="text-base">Bus</span>
                         <span>Bus Lines</span>
                     </span>
                     <span id="bus-switch-pill" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-300 text-slate-700">OFF</span>
@@ -440,7 +440,7 @@
 
     <!-- Reopen transit dock on small screens -->
     <button id="dock-show-btn" type="button" class="hidden fixed left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-slate-900/95 text-white text-[10px] font-extrabold shadow-2xl border border-white/10">
-        🚌 🚇 Transit
+        Transit
     </button>
 
     <!-- Toast Notification Pill -->
@@ -1212,14 +1212,50 @@
             }
         }
 
+        // Make basemap street/place labels earlier, larger and more readable on phones.
+        function enhanceBasemapLabels() {
+            const streetField = ['coalesce', ['get', 'name_en'], ['get', 'name:latin'], ['get', 'name'], ['get', 'name:nonlatin'], ''];
+            const labelPaint = { 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 };
+
+            if (map.getLayer('highway-name-major')) {
+                if (map.setLayerZoomRange) map.setLayerZoomRange('highway-name-major', 10, 22);
+                map.setLayoutProperty('highway-name-major', 'text-field', streetField);
+                map.setLayoutProperty('highway-name-major', 'text-size', ['interpolate', ['linear'], ['zoom'], 10, 10.5, 13, 12.5, 16, 15]);
+                map.setPaintProperty('highway-name-major', 'text-color', '#4b5563');
+                Object.entries(labelPaint).forEach(([k, v]) => map.setPaintProperty('highway-name-major', k, v));
+            }
+            if (map.getLayer('highway-name-minor')) {
+                if (map.setLayerZoomRange) map.setLayerZoomRange('highway-name-minor', 12.8, 22);
+                map.setLayoutProperty('highway-name-minor', 'text-field', streetField);
+                map.setLayoutProperty('highway-name-minor', 'text-size', ['interpolate', ['linear'], ['zoom'], 13, 10.5, 16, 13.5]);
+                map.setPaintProperty('highway-name-minor', 'text-color', '#6b7280');
+                Object.entries(labelPaint).forEach(([k, v]) => map.setPaintProperty('highway-name-minor', k, v));
+            }
+            if (map.getLayer('highway-name-path')) {
+                if (map.setLayerZoomRange) map.setLayerZoomRange('highway-name-path', 14.8, 22);
+                map.setLayoutProperty('highway-name-path', 'text-field', streetField);
+                map.setLayoutProperty('highway-name-path', 'text-size', ['interpolate', ['linear'], ['zoom'], 15, 10, 18, 12.5]);
+                map.setPaintProperty('highway-name-path', 'text-color', '#9ca3af');
+                Object.entries(labelPaint).forEach(([k, v]) => map.setPaintProperty('highway-name-path', k, v));
+            }
+            ['label_city', 'label_town', 'label_village', 'label_other'].forEach(id => {
+                if (!map.getLayer(id)) return;
+                map.setLayoutProperty(id, 'text-field', streetField);
+                map.setPaintProperty(id, 'text-halo-color', '#ffffff');
+                map.setPaintProperty(id, 'text-halo-width', 1.2);
+            });
+        }
+
         map.on('load', () => {
             setupTransitMapLayers();
+            enhanceBasemapLabels();
             renderPlaceMarkers();
         });
 
         // Re-apply custom vector layers whenever basemap style changes
         map.on('style.load', () => {
             setupTransitMapLayers();
+            enhanceBasemapLabels();
         });
 
         // Station & Line Click Popups
@@ -1326,7 +1362,7 @@
                 if (d < nearDist) { nearDist = d; nearMetro = st; }
             });
             const metroHtml = (nearMetro && nearDist <= 1.2)
-                ? `<div class="text-[11px] text-slate-500 pt-0.5">🚇 ${nearMetro.name} • ${nearDist.toFixed(1)} km</div>`
+                ? `<div class="text-[11px] text-slate-500 pt-0.5">${nearMetro.name} • ${nearDist.toFixed(1)} km</div>`
                 : '';
 
             activePopup = new maplibregl.Popup({ offset: 8 })
@@ -1386,7 +1422,7 @@
                 const el = document.createElement('div');
                 el.className = 'place-marker';
                 el.title = `${place.name} (${place.cat})`;
-                el.innerHTML = `<span class="text-xs leading-none">${place.icon}</span>`;
+                el.innerHTML = `<span class="text-[10px] font-black leading-none text-slate-700">${(place.cat || 'P')[0]}</span>`;
 
                 el.addEventListener('click', (ev) => {
                     ev.stopPropagation();
@@ -1507,7 +1543,7 @@
             const taxiMins = Math.max(2, Math.round((minDist * 1.3) / 0.65));
             const distSummary = minDist < 0.35
                 ? `<span class="text-emerald-700 font-bold">Right at station (~3 min walk)</span>`
-                : `<strong>${minDist.toFixed(1)} km</strong> • 🚶 ~${walkMins} min • 🚕 ~${taxiMins} min`;
+                : `<strong>${minDist.toFixed(1)} km</strong> • Walk ~${walkMins} min • Taxi ~${taxiMins} min`;
 
             const busBadges = nearbyBuses.length > 0
                 ? nearbyBuses.map(r => `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px]">${r}</span>`).join(' ')
@@ -1619,7 +1655,6 @@
                     <button class="search-item w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 flex items-center justify-between gap-2 transition"
                         data-type="place" data-name="${p.name}" data-lat="${p.lat}" data-lng="${p.lng}" data-cat="${p.cat}">
                         <span class="flex items-center gap-2 min-w-0">
-                            <span class="text-sm">${p.icon}</span>
                             <span class="font-bold text-xs text-slate-900 truncate">${p.name}</span>
                         </span>
                         <span class="text-[10px] font-semibold text-slate-400 shrink-0">${p.cat}</span>
@@ -1632,7 +1667,6 @@
                     <button class="search-item w-full text-left px-3.5 py-2.5 hover:bg-blue-50 flex items-center justify-between gap-2 transition"
                         data-type="station" data-name="${s.name}" data-lat="${s.lat}" data-lng="${s.lng}">
                         <span class="flex items-center gap-2 min-w-0">
-                            <span class="text-sm">🚇</span>
                             <span class="font-bold text-xs text-blue-950 truncate">${s.name}</span>
                         </span>
                         <span class="flex items-center gap-1 shrink-0">${badges}</span>
@@ -1644,7 +1678,6 @@
                     <button class="search-item w-full text-left px-3.5 py-2.5 hover:bg-amber-50 flex items-center justify-between gap-2 transition"
                         data-type="bus" data-route="${b.route}">
                         <span class="flex items-center gap-2 min-w-0">
-                            <span class="text-sm">🚌</span>
                             <span class="font-bold text-xs text-amber-950 truncate">${b.route} — ${b.name}</span>
                         </span>
                         <span class="text-[10px] font-semibold text-amber-700 shrink-0">${{ MAIN: 'Main', SECTOR: 'Sector', COMMUNITY: 'Community' }[b.category] || b.category}</span>
@@ -1656,7 +1689,6 @@
                     <button class="search-item w-full text-left px-3.5 py-2.5 hover:bg-amber-50 flex items-center justify-between gap-2 transition"
                         data-type="stop" data-name="${s.n}" data-lat="${s.g[1]}" data-lng="${s.g[0]}" data-route="${s.r}">
                         <span class="flex items-center gap-2 min-w-0">
-                            <span class="text-sm">🚏</span>
                             <span class="font-bold text-xs text-amber-950 truncate">${s.n}</span>
                         </span>
                         <span class="text-[10px] font-semibold text-amber-700 shrink-0">${s.r ? 'BUS ' + s.r : 'Stop'}</span>
@@ -2079,15 +2111,15 @@
             const hit = s => normTxt(s).includes(qn);
             const items = [];
             const home = homeEndpoint();
-            if (home && hit(home.name)) items.push({ label: home.name, sub: 'Saved Home', icon: '🏠', data: home });
+            if (home && hit(home.name)) items.push({ label: home.name, sub: 'Saved Home', data: home });
             RIYADH_PLACES.forEach(p => {
-                if (hit(p.name) || hit(p.cat)) items.push({ label: p.name, sub: p.cat, icon: p.icon, data: { name: p.name, lat: p.lat, lng: p.lng, kind: 'place' } });
+                if (hit(p.name) || hit(p.cat)) items.push({ label: p.name, sub: p.cat, data: { name: p.name, lat: p.lat, lng: p.lng, kind: 'place' } });
             });
             ALL_STATIONS.forEach(s => {
-                if (hit(s.name)) items.push({ label: s.name, sub: 'Metro Station', icon: '🚇', data: { name: s.name, lat: s.lat, lng: s.lng, kind: 'station' } });
+                if (hit(s.name)) items.push({ label: s.name, sub: 'Metro Station', data: { name: s.name, lat: s.lat, lng: s.lng, kind: 'station' } });
             });
             BUS_STOPS_DATA.forEach(s => {
-                if (s.n && hit(s.n)) items.push({ label: s.n, sub: 'Bus Stop' + (s.r ? ' • BUS ' + s.r : ''), icon: '🚏', data: { name: s.n, lat: s.g[1], lng: s.g[0], kind: 'stop' } });
+                if (s.n && hit(s.n)) items.push({ label: s.n, sub: 'Bus Stop' + (s.r ? ' • BUS ' + s.r : ''), data: { name: s.n, lat: s.g[1], lng: s.g[0], kind: 'stop' } });
             });
             const seen = new Set();
             return items.filter(it => {
@@ -2108,7 +2140,6 @@
                 if (!items.length) { dd.classList.add('hidden'); return; }
                 dd.innerHTML = items.map((it, i) => `
                     <button class="sug-item w-full text-left px-3 py-2 hover:bg-sky-50 flex items-center gap-2 transition" data-i="${i}">
-                        <span class="text-sm shrink-0">${it.icon}</span>
                         <span class="min-w-0 flex-1">
                             <span class="block font-bold text-xs text-slate-900 truncate">${it.label}</span>
                             <span class="block text-[10px] text-slate-400 truncate">${it.sub}</span>
@@ -2181,15 +2212,18 @@
         }
 
         function metroPlan(from, to) {
-            // multi-source Dijkstra: start cost = walk time from origin to each station
+            // Access = best way to reach each station (walk or bus feeder).
+            // Egress = best way to leave each station toward the destination.
+            const access = computeEndpointOptions(from);
+            const egress = reverseOptions(computeEndpointOptions(to));
+
             const N = ALL_STATIONS.length;
             const dist = new Array(N).fill(Infinity);
             const prev = new Array(N).fill(null);
             const pq = [];
             ALL_STATIONS.forEach((s, i) => {
-                const w = sec(haversineKm(from.lat, from.lng, s.lat, s.lng), WALK_KMH);
-                dist[i] = w;
-                pq.push([w, i]);
+                dist[i] = access[i].time;
+                pq.push([access[i].time, i]);
             });
             const push = (d, i) => { pq.push([d, i]); pq.sort((a, b) => a[0] - b[0]); };
             while (pq.length) {
@@ -2205,10 +2239,10 @@
                     }
                 }
             }
-            // best exit station near destination
+            // best exit station = metro arrival + best egress to destination
             let best = -1, bestT = Infinity;
             ALL_STATIONS.forEach((s, i) => {
-                const t = dist[i] + sec(haversineKm(s.lat, s.lng, to.lat, to.lng), WALK_KMH);
+                const t = dist[i] + egress[i].time;
                 if (t < bestT) { bestT = t; best = i; }
             });
             if (best < 0 || !isFinite(bestT)) return null;
@@ -2219,14 +2253,15 @@
                 cur = prev[cur] ? prev[cur].from : null;
             }
             path.reverse();
-            // convert to legs
-            const legs = [];
-            let i = 0;
-            // first leg: walk from origin to first station if >150m
-            const firstSt = ALL_STATIONS[path[0]];
-            const w0 = haversineKm(from.lat, from.lng, firstSt.lat, firstSt.lng);
-            if (w0 > 0.15) legs.push({ type: 'walk', from: from.name, to: firstSt.name, km: w0 });
-            // edges between consecutive path nodes
+            if (path.length < 2) return null; // no actual metro ride
+
+            const entryIdx = path[0];
+            const exitIdx = path[path.length - 1];
+            const firstSt = ALL_STATIONS[entryIdx];
+            const lastSt = ALL_STATIONS[exitIdx];
+
+            // legs = access legs + metro edges + egress legs
+            const legs = access[entryIdx].legs.slice();
             for (let k = 0; k < path.length - 1; k++) {
                 const u = path[k], v = path[k + 1];
                 const edge = metroAdj[u].find(e => e.to === v);
@@ -2234,7 +2269,6 @@
                 if (edge.walk) {
                     legs.push({ type: 'walk', from: ALL_STATIONS[u].name, to: ALL_STATIONS[v].name, km: edge.dist });
                 } else {
-                    // merge into current ride leg if same line continues
                     const last = legs[legs.length - 1];
                     if (last && last.type === 'ride' && last.line === edge.line) {
                         last.to = ALL_STATIONS[v].name;
@@ -2246,24 +2280,28 @@
                     }
                 }
             }
-            const lastSt = ALL_STATIONS[path[path.length - 1]];
-            const w1 = haversineKm(lastSt.lat, lastSt.lng, to.lat, to.lng);
-            if (w1 > 0.15) legs.push({ type: 'walk', from: lastSt.name, to: to.name, km: w1 });
-            // transfer penalty
+            legs.push(...egress[exitIdx].legs);
+
+            const hasRide = legs.some(l => l.type === 'ride');
+            const hasBus = legs.some(l => l.type === 'bus');
+            if (!hasRide) return null;
+
+            // transfer penalty: metro line changes only
             let transfers = 0, prevLine = null;
             legs.forEach(l => {
                 if (l.type === 'ride') {
                     if (prevLine && prevLine !== l.line) transfers++;
                     prevLine = l.line;
-                } else prevLine = null;
+                }
             });
             const totalTime = bestT + transfers * 240;
             const totalKm = legs.reduce((a, l) => a + l.km, 0);
             const walkKm = legs.filter(l => l.type === 'walk').reduce((a, l) => a + l.km, 0);
             const usedLines = [...new Set(legs.filter(l => l.type === 'ride').map(l => l.line))];
             return {
-                mode: 'metro', legs, timeSec: totalTime, km: totalKm, walkKm, transfers,
-                board: firstSt, alight: lastSt, lines: usedLines
+                mode: hasBus ? 'mixed' : 'metro', legs, timeSec: totalTime, km: totalKm, walkKm, transfers,
+                board: firstSt, alight: lastSt, lines: usedLines,
+                accessMode: access[entryIdx].mode, egressMode: egress[exitIdx].mode
             };
         }
 
@@ -2273,10 +2311,124 @@
             const p = f.properties;
             if (p.no > 0 && p.op) {
                 (BUS_STOPS_BY_ROUTE[p.no] = BUS_STOPS_BY_ROUTE[p.no] || []).push({
-                    lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], name: p.n
+                    lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], name: p.n || ('BUS ' + p.no + ' stop')
                 });
             }
         });
+
+        // ---- multimodal access/egress helpers (bus -> metro and metro -> bus)
+        const BUS_CORRIDOR_BY_NO = {};
+        BUS_CORRIDORS.forEach(b => { BUS_CORRIDOR_BY_NO[b.no] = b; });
+
+        const ALL_BUS_STOPS = BUS_STOPS_GEOJSON.features
+            .filter(f => f.properties.no > 0 && f.properties.op)
+            .map(f => ({
+                no: f.properties.no,
+                name: f.properties.n || ('BUS ' + f.properties.no + ' stop'),
+                lat: f.geometry.coordinates[1],
+                lng: f.geometry.coordinates[0],
+                color: f.properties.color || '#d97706'
+            }));
+
+        // For every bus stop, remember the closest metro station it can feed (<=850 m).
+        const ROUTE_STATION_STOPS = {};
+        ALL_BUS_STOPS.forEach(stop => {
+            let best = -1, bd = Infinity;
+            ALL_STATIONS.forEach((s, i) => {
+                const d = haversineKm(stop.lat, stop.lng, s.lat, s.lng);
+                if (d < bd) { bd = d; best = i; }
+            });
+            if (best >= 0 && bd <= 0.85) {
+                (ROUTE_STATION_STOPS[stop.no] = ROUTE_STATION_STOPS[stop.no] || []).push({
+                    stop, stationIdx: best, stationDist: bd
+                });
+            }
+        });
+
+        function nearBusStops(point, maxKm = 1.2) {
+            const out = [];
+            ALL_BUS_STOPS.forEach(s => {
+                const d = haversineKm(point.lat, point.lng, s.lat, s.lng);
+                if (d <= maxKm) out.push({ ...s, dist: d });
+            });
+            return out.sort((a, b) => a.dist - b.dist);
+        }
+
+        function busLegGeometry(routeNo, a, b) {
+            const route = BUS_CORRIDOR_BY_NO[routeNo];
+            if (!route) return null;
+            const parts = route.geom.type === 'MultiLineString' ? route.geom.coordinates : [route.geom.coordinates];
+            let best = null;
+            parts.forEach(line => {
+                if (!line || line.length < 2) return;
+                const i1 = nearestIdxOnLine(line, a.lat, a.lng);
+                const i2 = nearestIdxOnLine(line, b.lat, b.lng);
+                if (i1.idx === i2.idx) return;
+                const lo = Math.min(i1.idx, i2.idx), hi = Math.max(i1.idx, i2.idx);
+                let km = 0;
+                for (let i = lo; i < hi; i++) {
+                    km += haversineKm(line[i][1], line[i][0], line[i + 1][1], line[i + 1][0]);
+                }
+                const time = sec(km, BUS_KMH, 300);
+                if (!best || time < best.time) best = { km, time, geo: line.slice(lo, hi + 1) };
+            });
+            return best;
+        }
+
+        // Best way to reach every metro station from `point`: walk, or bus to a
+        // stop that feeds that station. Returns one option per station index.
+        function computeEndpointOptions(point) {
+            const opts = ALL_STATIONS.map((s, i) => {
+                const d = haversineKm(point.lat, point.lng, s.lat, s.lng);
+                const t = sec(d, WALK_KMH);
+                return {
+                    time: t,
+                    km: d,
+                    walkKm: d,
+                    mode: 'walk',
+                    legs: d > 0.15 ? [{ type: 'walk', from: point.name, to: s.name, km: d, fromPt: { lat: point.lat, lng: point.lng }, toPt: { lat: s.lat, lng: s.lng } }] : []
+                };
+            });
+
+            const pStops = nearBusStops(point, 1.2).slice(0, 60);
+            pStops.forEach(ps => {
+                const stationStops = ROUTE_STATION_STOPS[ps.no] || [];
+                stationStops.forEach(ts => {
+                    if (ts.stop === ps) return;
+                    const ride = busLegGeometry(ps.no, ps, ts.stop);
+                    if (!ride) return;
+                    const walkIn = sec(ps.dist, WALK_KMH);
+                    const walkOut = sec(ts.stationDist, WALK_KMH);
+                    const total = walkIn + ride.time + walkOut;
+                    const i = ts.stationIdx;
+                    if (total >= opts[i].time - 1) return;
+                    const corr = BUS_CORRIDOR_BY_NO[ps.no];
+                    const legs = [];
+                    if (ps.dist > 0.12) legs.push({ type: 'walk', from: point.name, to: ps.name, km: ps.dist, fromPt: { lat: point.lat, lng: point.lng }, toPt: { lat: ps.lat, lng: ps.lng } });
+                    legs.push({
+                        type: 'bus', route: ps.no,
+                        routeName: corr ? corr.name : ('BUS ' + ps.no),
+                        color: ps.color || (corr && corr.color) || '#d97706',
+                        from: ps.name, to: ts.stop.name,
+                        km: ride.km, time: ride.time, geo: ride.geo
+                    });
+                    if (ts.stationDist > 0.12) legs.push({ type: 'walk', from: ts.stop.name, to: ALL_STATIONS[i].name, km: ts.stationDist, fromPt: { lat: ts.stop.lat, lng: ts.stop.lng }, toPt: { lat: ALL_STATIONS[i].lat, lng: ALL_STATIONS[i].lng } });
+                    opts[i] = { time: total, km: ps.dist + ride.km + ts.stationDist, walkKm: ps.dist + ts.stationDist, mode: 'bus', legs };
+                });
+            });
+            return opts;
+        }
+
+        function reverseLegs(legs) {
+            return legs.slice().reverse().map(l => {
+                if (l.type === 'walk') return { type: 'walk', from: l.to, to: l.from, km: l.km, fromPt: l.toPt, toPt: l.fromPt };
+                if (l.type === 'bus') return { type: 'bus', route: l.route, routeName: l.routeName, color: l.color, from: l.to, to: l.from, km: l.km, time: l.time, geo: l.geo ? l.geo.slice().reverse() : undefined };
+                return l;
+            });
+        }
+        function reverseOptions(opts) {
+            return opts.map(o => ({ ...o, legs: reverseLegs(o.legs) }));
+        }
 
         function nearestIdxOnLine(coords, lat, lng) {
             // coords: [[lng,lat],...]; returns index of nearest vertex
@@ -2369,8 +2521,9 @@
             if (plan) {
                 plan.best.legs.forEach(l => {
                     if (l.type === 'walk') {
-                        // straight dashed connector between leg endpoints — resolve coords
-                        const a = resolveLegPoint(l.from, plan), b = resolveLegPoint(l.to, plan);
+                        // straight dashed connector between leg endpoints — prefer explicit leg points
+                        const a = l.fromPt || resolveLegPoint(l.from, plan);
+                        const b = l.toPt || resolveLegPoint(l.to, plan);
                         if (a && b) feats.push({ type: 'Feature', properties: { kind: 'walk', color: '#64748b' }, geometry: { type: 'LineString', coordinates: [[a.lng, a.lat], [b.lng, b.lat]] } });
                     } else if (l.type === 'ride') {
                         const lineObj = METRO_LINES[l.line];
@@ -2415,10 +2568,10 @@
         function renderPlan(plan) {
             const res = document.getElementById('plan-results');
             const b = plan.best;
-            const modeLabel = { metro: '🚇 Metro', bus: '🚌 Bus', walk: '🚶 Walk' }[b.mode];
+            const modeLabel = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walk' }[b.mode] || 'Route';
 
             let boardText = 'Walking only — no metro or bus ride needed';
-            if (b.mode === 'metro' && b.board && b.alight && b.lines && b.lines.length) {
+            if ((b.mode === 'metro' || b.mode === 'mixed') && b.board && b.alight && b.lines && b.lines.length) {
                 const lineNames = (b.lines || []).map(id => METRO_LINES[id].shortName).join(' → ');
                 boardText = `Board at <b>${b.board.name}</b> • ${lineNames} • Get off at <b>${b.alight.name}</b>`;
             } else if (b.mode === 'bus' && b.board && b.alight) {
@@ -2455,10 +2608,10 @@
             html += `</ol></div>`;
             const alts = plan.options.slice(1);
             if (alts.length) {
-                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Other options</div>`;
+                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Slower / other options</div>`;
                 alts.forEach(o => {
-                    const lbl = { metro: 'Metro', bus: 'Bus', walk: 'Walk' }[o.mode];
-                    html += `<div class="flex justify-between text-[11px] text-slate-600 px-1"><span>${lbl}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></div>`;
+                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
+                    html += `<div class="flex justify-between text-[11px] text-slate-600 px-1"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></div>`;
                 });
             }
             res.innerHTML = html;
@@ -2537,7 +2690,7 @@
             if (alts.length) {
                 body.push('OTHER OPTIONS');
                 alts.forEach(o => {
-                    const lbl = { metro: 'Metro', bus: 'Bus', walk: 'Walking only' }[o.mode];
+                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walking only' }[o.mode] || o.mode;
                     body.push(`- ${lbl}: ${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km`);
                 });
                 body.push('');
