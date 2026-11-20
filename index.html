@@ -410,6 +410,16 @@
     <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xl pointer-events-none">
     </div>
 
+    <!-- App Update Banner -->
+    <div id="update-banner" class="hidden fixed top-32 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,360px)] bg-slate-900/95 backdrop-blur-xl text-white rounded-2xl shadow-2xl border border-white/10 p-3 flex items-center gap-3">
+        <div class="min-w-0 flex-1">
+            <div class="text-xs font-extrabold">New version available</div>
+            <div class="text-[10px] text-slate-300">Update Riyadh Transit to get the latest map.</div>
+        </div>
+        <button id="update-later-btn" class="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-[10px] font-bold transition">Later</button>
+        <button id="update-now-btn" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[10px] font-extrabold transition">Update</button>
+    </div>
+
     <script src="firebase-config.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -2503,6 +2513,57 @@
             clearTimeout(toastTimeout);
             toastTimeout = setTimeout(() => el.classList.add('hidden'), 2600);
         }
+
+        // =========================================================================
+        // 11b. APP UPDATE PROMPT — checks version.json published by CI/releases
+        // =========================================================================
+        const APP_VERSION_KEY = 'riyadhTransitAppVersion';
+        const UPDATE_DISMISS_KEY = 'riyadhTransitUpdateDismissed';
+        const updateBanner = document.getElementById('update-banner');
+        let pendingAppVersion = null;
+
+        function showUpdateBanner(version) {
+            pendingAppVersion = version;
+            updateBanner.classList.remove('hidden');
+        }
+
+        async function checkAppVersion() {
+            try {
+                const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const latest = String(data.version || '').trim();
+                if (!latest) return;
+                const current = localStorage.getItem(APP_VERSION_KEY);
+                if (!current) {
+                    localStorage.setItem(APP_VERSION_KEY, latest);
+                    return;
+                }
+                if (latest === current) return;
+                if (sessionStorage.getItem(UPDATE_DISMISS_KEY) === latest) return;
+                showUpdateBanner(latest);
+            } catch (e) { /* offline or version file missing */ }
+        }
+
+        document.getElementById('update-later-btn').addEventListener('click', () => {
+            if (pendingAppVersion) sessionStorage.setItem(UPDATE_DISMISS_KEY, pendingAppVersion);
+            updateBanner.classList.add('hidden');
+        });
+
+        document.getElementById('update-now-btn').addEventListener('click', async () => {
+            if (pendingAppVersion) localStorage.setItem(APP_VERSION_KEY, pendingAppVersion);
+            try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg) await reg.update();
+            } catch (e) { /* reload still works */ }
+            location.reload();
+        });
+
+        checkAppVersion();
+        setInterval(checkAppVersion, 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') checkAppVersion();
+        });
 
         // =========================================================================
         // 11. OFFLINE SUPPORT — register service worker (needs HTTPS or localhost)

@@ -1,7 +1,7 @@
 /* Riyadh Metro & Bus Explorer — Service Worker
    Offline-first: caches the app shell, libraries, fonts and all Riyadh map tiles. */
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 const SHELL_CACHE = 'riyadh-shell-' + VERSION;
 const RUNTIME_CACHE = 'riyadh-runtime-' + VERSION;
 const TILE_CACHE = 'riyadh-tiles-' + VERSION;
@@ -15,7 +15,11 @@ const SHELL_URLS = [
   './bus-routes.js',
   './bus-stops.js',
   './metro-data.js',
-  './firebase-config.js'
+  './firebase-config.js',
+  './version.json',
+  './icons/apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 // Third-party assets needed on first load (cached so app boots offline)
