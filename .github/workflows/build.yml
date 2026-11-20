@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-version
+  cancel-in-progress: false
+
+jobs:
+  bump-version:
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip ci]')) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write version.json
+        run: |
+          VERSION="run-${{ github.run_number }}-${GITHUB_SHA:0:7}"
+          printf '{"version":"%s","sha":"%s","builtAt":"%s"}\n' \
+            "$VERSION" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > version.json
+          cat version.json
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json
+
+          if git diff --cached --quiet; then
+            echo "version.json unchanged"
+          else
+            git commit -m "chore: bump app version [skip ci]"
+            git push
+          fi
