@@ -873,6 +873,7 @@
         let destinationMarker = null;
         let currentDestination = null;
         let activePopup = null;
+        let routingMode = 'walk'; // 'walk' or 'car'
 
         // =========================================================================
         // 5. BUILD GEOJSON SOURCES & VECTOR TRANSIT LAYERS
@@ -1372,26 +1373,31 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
-        // Fetch real walking route from OSRM (free public API)
-        async function fetchWalkingRoute(fromLng, fromLat, toLng, toLat) {
+        // Fetch real route from OSRM (free public API) — walk or car
+        async function fetchRoute(fromLng, fromLat, toLng, toLat, mode = 'walk') {
             try {
-                const url = `https://router.project-osrm.org/route/v1/walking/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
+                const profile = mode === 'car' ? 'driving' : 'walking';
+                const url = `https://router.project-osrm.org/route/v1/${profile}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
                 const res = await fetch(url);
                 if (!res.ok) return null;
                 const data = await res.json();
                 if (data.code !== 'Ok' || !data.routes || !data.routes[0]) return null;
-                return data.routes[0].geometry.coordinates;
+                return {
+                    coords: data.routes[0].geometry.coordinates,
+                    distance: data.routes[0].distance, // meters
+                    duration: data.routes[0].duration // seconds
+                };
             } catch (e) {
                 return null;
             }
         }
 
-        async function updateConnectorLine(lng, lat, station) {
+        async function updateConnectorLine(lng, lat, station, mode = 'walk') {
             const src = map.getSource('connector-line');
             if (!src) return;
 
-            const walkingCoords = await fetchWalkingRoute(lng, lat, station.lng, station.lat);
-            const coords = walkingCoords || [[lng, lat], [station.lng, station.lat]];
+            const route = await fetchRoute(lng, lat, station.lng, station.lat, mode);
+            const coords = route ? route.coords : [[lng, lat], [station.lng, station.lat]];
 
             src.setData({
                 type: 'FeatureCollection',
@@ -1449,7 +1455,7 @@
                 .slice(0, 3)
                 .map(b => b.route);
 
-            currentDestination = { name, lat, lng, category, closestStation: closest };
+            currentDestination = { name, lat, lng, category, closestStation: closest, walkDistKm, carDistKm };
 
             // Drop pulsing destination marker
             if (destinationMarker) destinationMarker.remove();
@@ -1463,20 +1469,21 @@
             // Ensure Metro Lines are visible
             if (!metroVisible) setMetroState(true);
 
-            // Fetch real walking distance and route
+            // Fetch real walking and car routes/distance
             let walkDistKm = minDist;
+            let carDistKm = minDist;
+            let walkRoute = null;
+            let carRoute = null;
             try {
-                const url = `https://router.project-osrm.org/route/v1/walking/${lng},${lat};${closest.lng},${closest.lat}?overview=false`;
-                const res = await fetch(url);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.code === 'Ok' && data.routes && data.routes[0]) {
-                        walkDistKm = data.routes[0].distance / 1000;
-                    }
-                }
+                walkRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'walk');
+                if (walkRoute) walkDistKm = walkRoute.distance / 1000;
+            } catch (e) {}
+            try {
+                carRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'car');
+                if (carRoute) carDistKm = carRoute.distance / 1000;
             } catch (e) {}
 
-            await updateConnectorLine(lng, lat, closest);
+            await updateConnectorLine(lng, lat, closest, routingMode);
 
             // Fit bounds cleanly around destination + nearest Metro station
             const bounds = new maplibregl.LngLatBounds();
@@ -1494,16 +1501,22 @@
             }).join(' ');
 
             const walkMins = Math.max(2, Math.round((walkDistKm * 1.25) / 0.08));
-            const taxiMins = Math.max(2, Math.round((walkDistKm * 1.3) / 0.65));
-            const distSummary = walkDistKm < 0.35
-                ? `<span class="text-emerald-700 font-bold">Right at station (~3 min walk)</span>`
-                : `<strong>${walkDistKm.toFixed(1)} km</strong> • Walk ~${walkMins} min • Taxi ~${taxiMins} min`;
+            const carMins = Math.max(2, Math.round((carDistKm * 1.1) / 0.65));
+            const distSummary = routingMode === 'walk'
+                ? (walkDistKm < 0.35
+                    ? `<span class="text-emerald-700 font-bold">Right at station (~3 min walk)</span>`
+                    : `<strong>${walkDistKm.toFixed(1)} km</strong> • Walk ~${walkMins} min`)
+                : `<strong>${carDistKm.toFixed(1)} km</strong> • Drive ~${carMins} min`;
 
             const busBadges = nearbyBuses.length > 0
                 ? nearbyBuses.map(r => `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px]">${r}</span>`).join(' ')
                 : `<span class="text-slate-500">Check Darb app for local feeder</span>`;
 
             document.getElementById('sheet-body').innerHTML = `
+                <div class="flex gap-2 mb-3">
+                    <button id="btn-mode-walk" class="flex-1 py-2 rounded-xl text-xs font-bold transition ${routingMode === 'walk' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}">Walk</button>
+                    <button id="btn-mode-car" class="flex-1 py-2 rounded-xl text-xs font-bold transition ${routingMode === 'car' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}">Car</button>
+                </div>
                 <div class="bg-emerald-50/90 border border-emerald-200/90 rounded-2xl p-3 space-y-1">
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Closest Metro Station</span>
@@ -1526,6 +1539,39 @@
             `;
 
             document.getElementById('route-sheet').classList.remove('hidden');
+
+            // Walk/Car toggle
+            document.getElementById('btn-mode-walk').addEventListener('click', async () => {
+                routingMode = 'walk';
+                document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-emerald-600 text-white';
+                document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                if (currentDestination && currentDestination.closestStation) {
+                    await updateConnectorLine(currentDestination.lng, currentDestination.lat, currentDestination.closestStation, 'walk');
+                    const wd = currentDestination.walkDistKm || minDist;
+                    const walkMins = Math.max(2, Math.round((wd * 1.25) / 0.08));
+                    const distEl = document.querySelector('#sheet-body .bg-emerald-50\\/90 .text-xs');
+                    if (distEl) {
+                        distEl.innerHTML = wd < 0.35
+                            ? `<span class="text-emerald-700 font-bold">Right at station (~3 min walk)</span>`
+                            : `<strong>${wd.toFixed(1)} km</strong> • Walk ~${walkMins} min`;
+                    }
+                }
+            });
+
+            document.getElementById('btn-mode-car').addEventListener('click', async () => {
+                routingMode = 'car';
+                document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-900 text-white';
+                document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                if (currentDestination && currentDestination.closestStation) {
+                    await updateConnectorLine(currentDestination.lng, currentDestination.lat, currentDestination.closestStation, 'car');
+                    const cd = currentDestination.carDistKm || minDist;
+                    const carMins = Math.max(2, Math.round((cd * 1.1) / 0.65));
+                    const distEl = document.querySelector('#sheet-body .bg-emerald-50\\/90 .text-xs');
+                    if (distEl) {
+                        distEl.innerHTML = `<strong>${cd.toFixed(1)} km</strong> • Drive ~${carMins} min`;
+                    }
+                }
+            });
         }
 
         // Tap anywhere on Riyadh map to drop a destination pin & find closest Metro
