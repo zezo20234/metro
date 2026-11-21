@@ -77,24 +77,6 @@
                 left: 16px !important;
             }
         }
-        /* Custom Place Pin */
-        .place-marker {
-            width: 28px;
-            height: 28px;
-            border-radius: 9999px;
-            background: #ffffff;
-            border: 2px solid #0f172a;
-            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.25);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .place-marker:hover, .place-marker:active {
-            transform: scale(1.22);
-            z-index: 20;
-        }
         /* Pulsing Destination Pin — NOTE: no position here, MapLibre markers need absolute */
         .dest-pin-wrap {
             width: 36px;
@@ -202,31 +184,6 @@
 
             <!-- Live Search Autocomplete Dropdown -->
             <div id="search-results-dropdown" class="hidden pointer-events-auto bg-white/98 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/90 max-h-64 overflow-y-auto divide-y divide-slate-100">
-            </div>
-
-            <!-- Horizontal Scrollable Category & Quick Place Chips -->
-            <div id="quick-chips-bar" class="pointer-events-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                <button data-cat="ALL" id="chip-all" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-900 text-white shadow-sm transition">
-                    All Places
-                </button>
-                <button data-cat="Mall" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    Malls
-                </button>
-                <button data-cat="Landmark" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    Landmarks
-                </button>
-                <button data-cat="District" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    Districts
-                </button>
-                <button data-cat="University" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    Universities
-                </button>
-                <button data-cat="Hospital" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    Hospitals
-                </button>
-                <button data-cat="NONE" class="cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-500 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition">
-                    Hide Pins
-                </button>
             </div>
         </div>
     </header>
@@ -887,7 +844,6 @@
         const TRANSFER_HUBS = ALL_STATIONS.filter(s => s.hub === true);
 
         // Live UI counters (real data-driven counts)
-        document.getElementById('chip-all').textContent = `All Places (${RIYADH_PLACES.length})`;
         document.getElementById('station-count-caption').textContent = `${ALL_STATIONS.length} stations • ${TRANSFER_HUBS.length} interchanges`;
         document.getElementById('bus-count-badge').textContent = `${BUS_CORRIDORS.length} Routes • ${BUS_STOPS_DATA.length.toLocaleString()} Stops`;
 
@@ -913,8 +869,6 @@
         let busVisible = false;
         let activeLineFilter = 'ALL'; // 'ALL' or 'L1'..'L6'
         let activeBusFilter = 'ALL';  // 'ALL', 'MAIN', 'SECTOR', 'COMMUNITY', or 'R<no>'
-        let activePlaceCat = 'ALL';   // 'ALL', 'Mall', 'Landmark', 'District', 'University', 'Hospital', 'NONE'
-        let placeMarkers = [];
         let destinationMarker = null;
         let currentDestination = null;
         let activePopup = null;
@@ -1249,7 +1203,6 @@
         map.on('load', () => {
             setupTransitMapLayers();
             enhanceBasemapLabels();
-            renderPlaceMarkers();
         });
 
         // Re-apply custom vector layers whenever basemap style changes
@@ -1406,38 +1359,7 @@
         map.on('mouseleave', 'bus-stops-layer', () => map.getCanvas().style.cursor = '');
 
         // =========================================================================
-        // 6. PLACE PINS RENDERING
-        // =========================================================================
-        function renderPlaceMarkers() {
-            placeMarkers.forEach(m => m.remove());
-            placeMarkers = [];
-
-            if (activePlaceCat === 'NONE') return;
-
-            const filtered = activePlaceCat === 'ALL'
-                ? RIYADH_PLACES
-                : RIYADH_PLACES.filter(p => p.cat === activePlaceCat);
-
-            filtered.forEach(place => {
-                const el = document.createElement('div');
-                el.className = 'place-marker';
-                el.title = `${place.name} (${place.cat})`;
-                el.innerHTML = `<span class="text-[10px] font-black leading-none text-slate-700">${(place.cat || 'P')[0]}</span>`;
-
-                el.addEventListener('click', (ev) => {
-                    ev.stopPropagation();
-                    selectDestination(place.name, place.lat, place.lng, place.cat);
-                });
-
-                const marker = new maplibregl.Marker({ element: el })
-                    .setLngLat([place.lng, place.lat])
-                    .addTo(map);
-                placeMarkers.push(marker);
-            });
-        }
-
-        // =========================================================================
-        // 7. CLOSEST METRO, INTERCHANGE & NEARBY BUS PLANNER
+        // 6. CLOSEST METRO, INTERCHANGE & NEARBY BUS PLANNER
         // =========================================================================
         function haversineKm(lat1, lon1, lat2, lon2) {
             const R = 6371;
@@ -1735,18 +1657,6 @@
             searchInput.value = '';
             clearSearchBtn.classList.add('hidden');
             dropdown.classList.add('hidden');
-        });
-
-        // Category Filter Chips
-        document.querySelectorAll('.cat-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                activePlaceCat = chip.dataset.cat;
-                document.querySelectorAll('.cat-chip').forEach(c => {
-                    c.className = 'cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/95 text-slate-700 border border-slate-200/80 shadow-sm hover:bg-slate-50 transition';
-                });
-                chip.className = 'cat-chip shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-900 text-white shadow-sm transition';
-                renderPlaceMarkers();
-            });
         });
 
         // GPS Locate Me Button
