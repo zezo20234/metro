@@ -1065,12 +1065,15 @@
                 });
             }
 
-            // 3. Walking Connector Line Source & Layer
+            // 3. Walking Connector Line Source & Layer (render under buildings/POIs)
             if (!map.getSource('connector-line')) {
                 map.addSource('connector-line', {
                     type: 'geojson',
                     data: { type: 'FeatureCollection', features: [] }
                 });
+            }
+            if (!map.getLayer('connector-line-layer')) {
+                const beforeLayer = map.getLayer('poi') ? 'poi' : (map.getLayer('building') ? 'building' : undefined);
                 map.addLayer({
                     id: 'connector-line-layer',
                     type: 'line',
@@ -1081,7 +1084,11 @@
                         'line-width': 4,
                         'line-dasharray': [1.5, 1.5]
                     }
-                });
+                }, beforeLayer);
+            } else {
+                // Re-insert after style reload to maintain layer order
+                const beforeLayer = map.getLayer('poi') ? 'poi' : (map.getLayer('building') ? 'building' : undefined);
+                map.moveLayer('connector-line-layer', beforeLayer);
             }
 
             // 4. Metro Stations Circle Layer
@@ -1211,6 +1218,11 @@
         map.on('style.load', () => {
             setupTransitMapLayers();
             enhanceBasemapLabels();
+            // Ensure connector line stays under buildings/POIs after style reload
+            if (map.getLayer('connector-line-layer')) {
+                const beforeLayer = map.getLayer('poi') ? 'poi' : (map.getLayer('building') ? 'building' : undefined);
+                map.moveLayer('connector-line-layer', beforeLayer);
+            }
         });
 
         // Station & Line Click Popups
@@ -1587,6 +1599,10 @@
                 routingMode = 'walk';
                 document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-emerald-600 text-white';
                 document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                if (map.getLayer('connector-line-layer')) {
+                    map.setPaintProperty('connector-line-layer', 'line-color', '#059669');
+                    map.setPaintProperty('connector-line-layer', 'line-dasharray', [1.5, 1.5]);
+                }
                 if (currentDestination && currentDestination.closestStation) {
                     await updateConnectorLine(currentDestination.lng, currentDestination.lat, currentDestination.closestStation, 'walk');
                     const wd = currentDestination.walkDistKm || minDist;
@@ -1604,6 +1620,10 @@
                 routingMode = 'car';
                 document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-900 text-white';
                 document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                if (map.getLayer('connector-line-layer')) {
+                    map.setPaintProperty('connector-line-layer', 'line-color', '#0f172a');
+                    map.setPaintProperty('connector-line-layer', 'line-dasharray', [0, 0]);
+                }
                 if (currentDestination && currentDestination.closestStation) {
                     await updateConnectorLine(currentDestination.lng, currentDestination.lat, currentDestination.closestStation, 'car');
                     const cd = currentDestination.carDistKm || minDist;
