@@ -1382,10 +1382,19 @@
                 if (!res.ok) return null;
                 const data = await res.json();
                 if (data.code !== 'Ok' || !data.routes || !data.routes[0]) return null;
+
+                const routeDist = data.routes[0].distance; // meters
+                const straightDist = haversineKm(fromLat, fromLng, toLat, toLng) * 1000; // meters
+
+                // If walking route is way longer than straight line (OSRM giving weird U-turns), fall back to straight line
+                if (mode === 'walk' && routeDist > straightDist * 1.5) {
+                    return null;
+                }
+
                 return {
                     coords: data.routes[0].geometry.coordinates,
-                    distance: data.routes[0].distance, // meters
-                    duration: data.routes[0].duration // seconds
+                    distance: routeDist,
+                    duration: data.routes[0].duration
                 };
             } catch (e) {
                 return null;
@@ -1409,6 +1418,8 @@
                     }
                 }]
             });
+
+            return route ? route.distance : null;
         }
 
         async function selectDestination(name, lat, lng, category = 'Selected Spot') {
@@ -1535,15 +1546,28 @@
                     if (walkRoute) {
                         walkDistKm = walkRoute.distance / 1000;
                         currentDestination.walkDistKm = walkDistKm;
+                    } else {
+                        // Fallback to straight-line distance if OSRM gave bad route
+                        walkDistKm = minDist;
+                        currentDestination.walkDistKm = minDist;
                     }
-                } catch (e) {}
+                } catch (e) {
+                    walkDistKm = minDist;
+                    currentDestination.walkDistKm = minDist;
+                }
                 try {
                     const carRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'car');
                     if (carRoute) {
                         carDistKm = carRoute.distance / 1000;
                         currentDestination.carDistKm = carDistKm;
+                    } else {
+                        carDistKm = minDist;
+                        currentDestination.carDistKm = minDist;
                     }
-                } catch (e) {}
+                } catch (e) {
+                    carDistKm = minDist;
+                    currentDestination.carDistKm = minDist;
+                }
                 await updateConnectorLine(lng, lat, closest, routingMode);
                 // Update distance text if sheet is still open
                 if (!document.getElementById('route-sheet').classList.contains('hidden')) {
