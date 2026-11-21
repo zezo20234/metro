@@ -873,7 +873,7 @@
         let destinationMarker = null;
         let currentDestination = null;
         let activePopup = null;
-        let routingMode = 'walk'; // 'walk' or 'car'
+        let routingMode = 'walk'; // 'walk', 'car', or 'measure'
 
         // =========================================================================
         // 5. BUILD GEOJSON SOURCES & VECTOR TRANSIT LAYERS
@@ -1089,6 +1089,17 @@
                 // Re-insert after style reload to maintain layer order
                 const beforeLayer = map.getLayer('poi') ? 'poi' : (map.getLayer('building') ? 'building' : undefined);
                 map.moveLayer('connector-line-layer', beforeLayer);
+                // Restore current mode styling
+                if (routingMode === 'car') {
+                    map.setPaintProperty('connector-line-layer', 'line-color', '#0f172a');
+                    map.setPaintProperty('connector-line-layer', 'line-dasharray', [0, 0]);
+                } else if (routingMode === 'measure') {
+                    map.setPaintProperty('connector-line-layer', 'line-color', '#dc2626');
+                    map.setPaintProperty('connector-line-layer', 'line-dasharray', [0, 0]);
+                } else {
+                    map.setPaintProperty('connector-line-layer', 'line-color', '#059669');
+                    map.setPaintProperty('connector-line-layer', 'line-dasharray', [1.5, 1.5]);
+                }
             }
 
             // 4. Metro Stations Circle Layer
@@ -1415,7 +1426,23 @@
 
         async function updateConnectorLine(lng, lat, station, mode = 'walk') {
             const src = map.getSource('connector-line');
-            if (!src) return;
+            if (!src) return null;
+
+            if (mode === 'measure') {
+                // Draw straight line and return straight-line distance
+                const straightDist = haversineKm(lat, lng, station.lat, station.lng);
+                src.setData({
+                    type: 'FeatureCollection',
+                    features: [{
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [[lng, lat], [station.lng, station.lat]]
+                        }
+                    }]
+                });
+                return straightDist;
+            }
 
             const route = await fetchRoute(lng, lat, station.lng, station.lat, mode);
             const coords = route ? route.coords : [[lng, lat], [station.lng, station.lat]];
@@ -1517,7 +1544,9 @@
                 ? (walkDistKm < 0.35
                     ? `<span class="text-emerald-700 font-bold">Right at station (~3 min walk)</span>`
                     : `<strong>${walkDistKm.toFixed(1)} km</strong> • Walk ~${walkMins} min`)
-                : `<strong>${carDistKm.toFixed(1)} km</strong> • Drive ~${carMins} min`;
+                : routingMode === 'car'
+                    ? `<strong>${carDistKm.toFixed(1)} km</strong> • Drive ~${carMins} min`
+                    : `<strong>${minDist.toFixed(2)} km</strong> • Direct distance`;
 
             const busBadges = nearbyBuses.length > 0
                 ? nearbyBuses.map(r => `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px]">${r}</span>`).join(' ')
@@ -1527,6 +1556,7 @@
                 <div class="flex gap-2 mb-3">
                     <button id="btn-mode-walk" class="flex-1 py-2 rounded-xl text-xs font-bold transition ${routingMode === 'walk' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}">Walk</button>
                     <button id="btn-mode-car" class="flex-1 py-2 rounded-xl text-xs font-bold transition ${routingMode === 'car' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}">Car</button>
+                    <button id="btn-mode-measure" class="flex-1 py-2 rounded-xl text-xs font-bold transition ${routingMode === 'measure' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600'}">Measure</button>
                 </div>
                 <div class="bg-emerald-50/90 border border-emerald-200/90 rounded-2xl p-3 space-y-1">
                     <div class="flex items-center justify-between gap-2">
@@ -1551,8 +1581,33 @@
 
             document.getElementById('route-sheet').classList.remove('hidden');
 
-            // Fetch routes in background and update UI when ready
+            // Fetch routes in background and update UI when ready (skip if measure mode)
             (async () => {
+                if (routingMode === 'measure') {
+                    const straightDist = haversineKm(lat, lng, closest.lat, closest.lng);
+                    const src = map.getSource('connector-line');
+                    if (src) {
+                        src.setData({
+                            type: 'FeatureCollection',
+                            features: [{
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'LineString',
+                                    coordinates: [[lng, lat], [closest.lng, closest.lat]]
+                                }
+                            }]
+                        });
+                    }
+                    if (map.getLayer('connector-line-layer')) {
+                        map.setPaintProperty('connector-line-layer', 'line-color', '#dc2626');
+                        map.setPaintProperty('connector-line-layer', 'line-dasharray', [0, 0]);
+                    }
+                    const distEl = document.querySelector('#sheet-body .bg-emerald-50\\/90 .text-xs');
+                    if (distEl && !document.getElementById('route-sheet').classList.contains('hidden')) {
+                        distEl.innerHTML = `<strong>${straightDist.toFixed(2)} km</strong> • Direct distance`;
+                    }
+                    return;
+                }
                 try {
                     const walkRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'walk');
                     if (walkRoute) {
@@ -1599,6 +1654,7 @@
                 routingMode = 'walk';
                 document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-emerald-600 text-white';
                 document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                document.getElementById('btn-mode-measure').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
                 if (map.getLayer('connector-line-layer')) {
                     map.setPaintProperty('connector-line-layer', 'line-color', '#059669');
                     map.setPaintProperty('connector-line-layer', 'line-dasharray', [1.5, 1.5]);
@@ -1620,6 +1676,7 @@
                 routingMode = 'car';
                 document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-900 text-white';
                 document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                document.getElementById('btn-mode-measure').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
                 if (map.getLayer('connector-line-layer')) {
                     map.setPaintProperty('connector-line-layer', 'line-color', '#0f172a');
                     map.setPaintProperty('connector-line-layer', 'line-dasharray', [0, 0]);
@@ -1631,6 +1688,38 @@
                     const distEl = document.querySelector('#sheet-body .bg-emerald-50\\/90 .text-xs');
                     if (distEl) {
                         distEl.innerHTML = `<strong>${cd.toFixed(1)} km</strong> • Drive ~${carMins} min`;
+                    }
+                }
+            });
+
+            document.getElementById('btn-mode-measure').addEventListener('click', async () => {
+                routingMode = 'measure';
+                document.getElementById('btn-mode-measure').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-red-600 text-white';
+                document.getElementById('btn-mode-walk').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                document.getElementById('btn-mode-car').className = 'flex-1 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600';
+                if (map.getLayer('connector-line-layer')) {
+                    map.setPaintProperty('connector-line-layer', 'line-color', '#dc2626');
+                    map.setPaintProperty('connector-line-layer', 'line-dasharray', [0, 0]);
+                }
+                if (currentDestination && currentDestination.closestStation) {
+                    // Draw straight line
+                    const src = map.getSource('connector-line');
+                    if (src) {
+                        src.setData({
+                            type: 'FeatureCollection',
+                            features: [{
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'LineString',
+                                    coordinates: [[currentDestination.lng, currentDestination.lat], [currentDestination.closestStation.lng, currentDestination.closestStation.lat]]
+                                }
+                            }]
+                        });
+                    }
+                    const straightDist = haversineKm(currentDestination.lat, currentDestination.lng, currentDestination.closestStation.lat, currentDestination.closestStation.lng);
+                    const distEl = document.querySelector('#sheet-body .bg-emerald-50\\/90 .text-xs');
+                    if (distEl) {
+                        distEl.innerHTML = `<strong>${straightDist.toFixed(2)} km</strong> • Direct distance`;
                     }
                 }
             });
