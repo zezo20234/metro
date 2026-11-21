@@ -1372,22 +1372,40 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
-        function updateConnectorLine(lng, lat, station) {
+        // Fetch real walking route from OSRM (free public API)
+        async function fetchWalkingRoute(fromLng, fromLat, toLng, toLat) {
+            try {
+                const url = `https://router.project-osrm.org/route/v1/walking/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                const data = await res.json();
+                if (data.code !== 'Ok' || !data.routes || !data.routes[0]) return null;
+                return data.routes[0].geometry.coordinates;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function updateConnectorLine(lng, lat, station) {
             const src = map.getSource('connector-line');
             if (!src) return;
+
+            const walkingCoords = await fetchWalkingRoute(lng, lat, station.lng, station.lat);
+            const coords = walkingCoords || [[lng, lat], [station.lng, station.lat]];
+
             src.setData({
                 type: 'FeatureCollection',
                 features: [{
                     type: 'Feature',
                     geometry: {
                         type: 'LineString',
-                        coordinates: [[lng, lat], [station.lng, station.lat]]
+                        coordinates: coords
                     }
                 }]
             });
         }
 
-        function selectDestination(name, lat, lng, category = 'Selected Spot') {
+        async function selectDestination(name, lat, lng, category = 'Selected Spot') {
             if (activePopup) activePopup.remove();
 
             // Find closest station (respecting isolated line if user isolated 1 color, or all stations)
@@ -1445,7 +1463,20 @@
             // Ensure Metro Lines are visible
             if (!metroVisible) setMetroState(true);
 
-            updateConnectorLine(lng, lat, closest);
+            // Fetch real walking distance and route
+            let walkDistKm = minDist;
+            try {
+                const url = `https://router.project-osrm.org/route/v1/walking/${lng},${lat};${closest.lng},${closest.lat}?overview=false`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                        walkDistKm = data.routes[0].distance / 1000;
+                    }
+                }
+            } catch (e) {}
+
+            await updateConnectorLine(lng, lat, closest);
 
             // Fit bounds cleanly around destination + nearest Metro station
             const bounds = new maplibregl.LngLatBounds();
@@ -1462,11 +1493,11 @@
                 return `<span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold" style="background:${l.color};color:${l.textColor}">${l.shortName}</span>`;
             }).join(' ');
 
-            const walkMins = Math.max(2, Math.round((minDist * 1.25) / 0.08));
-            const taxiMins = Math.max(2, Math.round((minDist * 1.3) / 0.65));
-            const distSummary = minDist < 0.35
+            const walkMins = Math.max(2, Math.round((walkDistKm * 1.25) / 0.08));
+            const taxiMins = Math.max(2, Math.round((walkDistKm * 1.3) / 0.65));
+            const distSummary = walkDistKm < 0.35
                 ? `<span class="text-emerald-700 font-bold">Right at station (~3 min walk)</span>`
-                : `<strong>${minDist.toFixed(1)} km</strong> • Walk ~${walkMins} min • Taxi ~${taxiMins} min`;
+                : `<strong>${walkDistKm.toFixed(1)} km</strong> • Walk ~${walkMins} min • Taxi ~${taxiMins} min`;
 
             const busBadges = nearbyBuses.length > 0
                 ? nearbyBuses.map(r => `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px]">${r}</span>`).join(' ')
@@ -1509,7 +1540,9 @@
                     handlePlannerMapPick(e.lngLat.lat, e.lngLat.lng);
                     return;
                 }
-                selectDestination('Pinned Map Spot', e.lngLat.lat, e.lngLat.lng, 'Custom Pin');
+                (async () => {
+                    await selectDestination('Pinned Map Spot', e.lngLat.lat, e.lngLat.lng, 'Custom Pin');
+                })();
             }, 0);
         });
 
@@ -1648,7 +1681,9 @@
                         searchInput.value = name;
                         showToast(`${name}${btn.dataset.route ? ' — BUS ' + btn.dataset.route : ''}`);
                     } else {
-                        selectDestination(name, lat, lng, btn.dataset.cat);
+                        (async () => {
+                            await selectDestination(name, lat, lng, btn.dataset.cat);
+                        })();
                     }
                 });
             });
@@ -1668,7 +1703,7 @@
             }
             showToast('Finding your GPS location in Riyadh...');
             navigator.geolocation.getCurrentPosition(
-                pos => selectDestination('My Current Location', pos.coords.latitude, pos.coords.longitude, 'GPS Location'),
+                async pos => { await selectDestination('My Current Location', pos.coords.latitude, pos.coords.longitude, 'GPS Location'); },
                 () => showToast('Location access blocked — tap any place or map spot instead')
             );
         });
