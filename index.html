@@ -1455,6 +1455,10 @@
                 .slice(0, 3)
                 .map(b => b.route);
 
+            // Fetch real walking and car routes/distance in background
+            let walkDistKm = minDist;
+            let carDistKm = minDist;
+
             currentDestination = { name, lat, lng, category, closestStation: closest, walkDistKm, carDistKm };
 
             // Drop pulsing destination marker
@@ -1469,23 +1473,7 @@
             // Ensure Metro Lines are visible
             if (!metroVisible) setMetroState(true);
 
-            // Fetch real walking and car routes/distance
-            let walkDistKm = minDist;
-            let carDistKm = minDist;
-            let walkRoute = null;
-            let carRoute = null;
-            try {
-                walkRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'walk');
-                if (walkRoute) walkDistKm = walkRoute.distance / 1000;
-            } catch (e) {}
-            try {
-                carRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'car');
-                if (carRoute) carDistKm = carRoute.distance / 1000;
-            } catch (e) {}
-
-            await updateConnectorLine(lng, lat, closest, routingMode);
-
-            // Fit bounds cleanly around destination + nearest Metro station
+            // Move map immediately
             const bounds = new maplibregl.LngLatBounds();
             bounds.extend([lng, lat]);
             bounds.extend([closest.lng, closest.lat]);
@@ -1539,6 +1527,36 @@
             `;
 
             document.getElementById('route-sheet').classList.remove('hidden');
+
+            // Fetch routes in background and update UI when ready
+            (async () => {
+                try {
+                    const walkRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'walk');
+                    if (walkRoute) {
+                        walkDistKm = walkRoute.distance / 1000;
+                        currentDestination.walkDistKm = walkDistKm;
+                    }
+                } catch (e) {}
+                try {
+                    const carRoute = await fetchRoute(lng, lat, closest.lng, closest.lat, 'car');
+                    if (carRoute) {
+                        carDistKm = carRoute.distance / 1000;
+                        currentDestination.carDistKm = carDistKm;
+                    }
+                } catch (e) {}
+                await updateConnectorLine(lng, lat, closest, routingMode);
+                // Update distance text if sheet is still open
+                if (!document.getElementById('route-sheet').classList.contains('hidden')) {
+                    const distEl = document.querySelector('#sheet-body .bg-emerald-50\\/90 .text-xs');
+                    if (distEl) {
+                        const mins = routingMode === 'walk'
+                            ? Math.max(2, Math.round((walkDistKm * 1.25) / 0.08))
+                            : Math.max(2, Math.round((carDistKm * 1.1) / 0.65));
+                        const label = routingMode === 'walk' ? 'Walk' : 'Drive';
+                        distEl.innerHTML = `<strong>${routingMode === 'walk' ? walkDistKm.toFixed(1) : carDistKm.toFixed(1)} km</strong> • ${label} ~${mins} min`;
+                    }
+                }
+            })();
 
             // Walk/Car toggle
             document.getElementById('btn-mode-walk').addEventListener('click', async () => {
