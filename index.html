@@ -141,6 +141,27 @@
             font-size: 10px;
             font-weight: 900;
         }
+        /* "You are here" GPS marker */
+        .user-blob {
+            position: relative;
+            width: 20px;
+            height: 20px;
+        }
+        .user-dot {
+            position: absolute;
+            inset: 4px;
+            border-radius: 9999px;
+            background: #2563eb;
+            border: 3px solid #ffffff;
+            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.55);
+        }
+        .user-acc {
+            position: absolute;
+            inset: -38px;
+            border-radius: 9999px;
+            background: rgba(37, 99, 235, 0.13);
+            border: 2px solid rgba(37, 99, 235, 0.35);
+        }
 
     </style>
 </head>
@@ -241,6 +262,12 @@
                 <div class="mt-0.5 flex gap-1.5">
                     <input id="plan-from-input" type="text" autocomplete="off" placeholder="Station, place, bus stop or map point..."
                         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <button id="plan-from-gps-btn" type="button" title="Use my current GPS location"
+                        class="w-9 shrink-0 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06z" />
+                        </svg>
+                    </button>
                     <button id="plan-from-map-btn" type="button" title="Choose From on the map"
                         class="w-9 shrink-0 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition flex items-center justify-center">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -1266,9 +1293,18 @@
                         <div class="font-extrabold text-sm text-slate-900">${props.name}</div>
                         <div class="flex flex-wrap gap-1">${badges}</div>
                         <div class="text-[11px] text-slate-500 pt-0.5">Standard 2-hr fare: SAR 4 (Darb)</div>
+                        <button class="popup-from-me mt-1 w-full px-2 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold transition">Directions from my location</button>
                     </div>
                 `)
                 .addTo(map);
+
+            const stFromMe = activePopup.getElement().querySelector('.popup-from-me');
+            if (stFromMe) {
+                stFromMe.addEventListener('click', () => {
+                    if (activePopup) activePopup.remove();
+                    planToPlace(props.name, coords[1], coords[0], 'Metro Station');
+                });
+            }
         });
 
         map.on('click', 'bus-lines-layer', (e) => {
@@ -1356,9 +1392,18 @@
                         ${p.op ? '' : '<div class="text-[10px] font-bold text-slate-400">Planned — not yet operating</div>'}
                         ${metroHtml}
                         ${p.r ? `<button class="bus-stop-isolate mt-1 w-full px-2 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition" data-no="${p.no}">Show BUS ${p.r} + its stops</button>` : ''}
+                        <button class="popup-from-me mt-1 w-full px-2 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold transition">Directions from my location</button>
                     </div>
                 `)
                 .addTo(map);
+
+            const stopFromMe = activePopup.getElement().querySelector('.popup-from-me');
+            if (stopFromMe) {
+                stopFromMe.addEventListener('click', () => {
+                    if (activePopup) activePopup.remove();
+                    planToPlace(p.n || 'Bus stop', e.lngLat.lat, e.lngLat.lng, 'Bus stop');
+                });
+            }
 
             const isoBtn = activePopup.getElement().querySelector('.bus-stop-isolate');
             if (isoBtn) {
@@ -1577,7 +1622,34 @@
                         <div class="flex flex-wrap gap-1">${busBadges}</div>
                     </div>
                 </div>
+                <button id="btn-plan-from-me" type="button" class="w-full px-3 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-xs font-extrabold transition flex items-center justify-center gap-2 shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    Directions from my location
+                </button>
             `;
+
+            const fromMeBtn = document.getElementById('btn-plan-from-me');
+            if (fromMeBtn) {
+                fromMeBtn.addEventListener('click', async () => {
+                    fromMeBtn.disabled = true;
+                    const prevHtml = fromMeBtn.innerHTML;
+                    fromMeBtn.innerHTML = 'Locating you…';
+                    const me = await getUserPosition({ fresh: true, timeout: 10000 });
+                    fromMeBtn.disabled = false;
+                    fromMeBtn.innerHTML = prevHtml;
+                    let ok = false;
+                    try {
+                        ok = planToPlace(name, lat, lng, category, me);
+                    } catch (e) {
+                        console.warn('Plan from location failed:', e);
+                    }
+                    if (!ok) {
+                        showToast('Could not plan route — check location permission');
+                    }
+                });
+            }
 
             document.getElementById('route-sheet').classList.remove('hidden');
 
@@ -1723,6 +1795,9 @@
                     }
                 }
             });
+
+            // Automatically route from the user's GPS position to this place
+            maybeAutoPlanFromMe(name, lat, lng, category);
         }
 
         // Tap anywhere on Riyadh map to drop a destination pin & find closest Metro
@@ -2052,6 +2127,7 @@
             homePickMode = false;
             document.body.classList.remove('map-picking');
             document.getElementById('planner-panel').classList.add('hidden');
+            drawPlan(null);
         }
 
         let planPickTarget = null; // 'from' | 'to'
@@ -2326,6 +2402,9 @@
         // ---- routing engine
         const WALK_KMH = 5, METRO_KMH = 40, BUS_KMH = 20;
         const sec = (km, kmh, extra = 0) => (km / kmh) * 3600 + extra;
+        const WALK_DETOUR = 1.25;   // street paths aren't straight lines
+        const walkSec = km => sec(km * WALK_DETOUR, WALK_KMH);
+        const WALK_PENALTY_SEC = 200; // extra cost per walking km for the "easy-on-feet" option
 
         // Metro adjacency with official segment times (t = seconds from previous station)
         const stIndex = {};
@@ -2347,48 +2426,54 @@
             for (let j = i + 1; j < ALL_STATIONS.length; j++) {
                 const d = haversineKm(ALL_STATIONS[i].lat, ALL_STATIONS[i].lng, ALL_STATIONS[j].lat, ALL_STATIONS[j].lng);
                 if (d < 0.9) {
-                    const w = sec(d, WALK_KMH);
+                    const w = walkSec(d);
                     metroAdj[i].push({ to: j, line: null, dist: d, time: w, walk: true });
                     metroAdj[j].push({ to: i, line: null, dist: d, time: w, walk: true });
                 }
             }
         }
 
-        function metroPlan(from, to) {
+        function metroPlan(from, to, walkPenalty = 0) {
             // Access = best way to reach each station (walk or bus feeder).
             // Egress = best way to leave each station toward the destination.
-            const access = computeEndpointOptions(from);
-            const egress = reverseOptions(computeEndpointOptions(to));
+            // walkPenalty > 0 produces the "easy-on-feet" variant: the search
+            // minimizes time + penalty*walking, avoiding needless walks.
+            const access = computeEndpointOptions(from, walkPenalty);
+            const egress = reverseOptions(computeEndpointOptions(to, walkPenalty));
 
             const N = ALL_STATIONS.length;
-            const dist = new Array(N).fill(Infinity);
+            const distS = new Array(N).fill(Infinity); // penalized score — drives the search
+            const distT = new Array(N).fill(Infinity); // true travel seconds
             const prev = new Array(N).fill(null);
             const pq = [];
             ALL_STATIONS.forEach((s, i) => {
-                dist[i] = access[i].time;
-                pq.push([access[i].time, i]);
+                distS[i] = access[i].score;
+                distT[i] = access[i].time;
+                pq.push([access[i].score, i]);
             });
             const push = (d, i) => { pq.push([d, i]); pq.sort((a, b) => a[0] - b[0]); };
             while (pq.length) {
                 pq.sort((a, b) => a[0] - b[0]);
                 const [d, u] = pq.shift();
-                if (d > dist[u]) continue;
+                if (d > distS[u]) continue;
                 for (const e of metroAdj[u]) {
-                    const nd = d + e.time;
-                    if (nd < dist[e.to]) {
-                        dist[e.to] = nd;
+                    const w = e.time + (e.walk ? e.dist * walkPenalty : 0);
+                    const nd = d + w;
+                    if (nd < distS[e.to]) {
+                        distS[e.to] = nd;
+                        distT[e.to] = distT[u] + e.time;
                         prev[e.to] = { from: u, edge: e };
                         push(nd, e.to);
                     }
                 }
             }
-            // best exit station = metro arrival + best egress to destination
-            let best = -1, bestT = Infinity;
+            // best exit station = penalized arrival + penalized egress to destination
+            let best = -1, bestS = Infinity;
             ALL_STATIONS.forEach((s, i) => {
-                const t = dist[i] + egress[i].time;
-                if (t < bestT) { bestT = t; best = i; }
+                const sScore = distS[i] + egress[i].score;
+                if (sScore < bestS) { bestS = sScore; best = i; }
             });
-            if (best < 0 || !isFinite(bestT)) return null;
+            if (best < 0 || !isFinite(bestS)) return null;
             // reconstruct node path
             const path = [];
             for (let cur = best; cur !== null && cur !== undefined; ) {
@@ -2437,7 +2522,7 @@
                     prevLine = l.line;
                 }
             });
-            const totalTime = bestT + transfers * 240;
+            const totalTime = distT[best] + egress[best].time + transfers * 240;
             const totalKm = legs.reduce((a, l) => a + l.km, 0);
             const walkKm = legs.filter(l => l.type === 'walk').reduce((a, l) => a + l.km, 0);
             const usedLines = [...new Set(legs.filter(l => l.type === 'ride').map(l => l.line))];
@@ -2520,17 +2605,20 @@
 
         // Best way to reach every metro station from `point`: walk, or bus to a
         // stop that feeds that station. Returns one option per station index.
-        function computeEndpointOptions(point) {
+        // walkPenalty > 0 ranks options by time + penalty*walking (score), so the
+        // "easy-on-feet" metro variant prefers less walking when times are close.
+        function computeEndpointOptions(point, walkPenalty = 0) {
+            const finish = o => { o.score = o.time + o.walkKm * walkPenalty; return o; };
             const opts = ALL_STATIONS.map((s, i) => {
                 const d = haversineKm(point.lat, point.lng, s.lat, s.lng);
-                const t = sec(d, WALK_KMH);
-                return {
+                const t = walkSec(d);
+                return finish({
                     time: t,
                     km: d,
                     walkKm: d,
                     mode: 'walk',
                     legs: d > 0.15 ? [{ type: 'walk', from: point.name, to: s.name, km: d, fromPt: { lat: point.lat, lng: point.lng }, toPt: { lat: s.lat, lng: s.lng } }] : []
-                };
+                });
             });
 
             const pStops = nearBusStops(point, 1.2).slice(0, 60);
@@ -2540,11 +2628,18 @@
                     if (ts.stop === ps) return;
                     const ride = busLegGeometry(ps.no, ps, ts.stop);
                     if (!ride) return;
-                    const walkIn = sec(ps.dist, WALK_KMH);
-                    const walkOut = sec(ts.stationDist, WALK_KMH);
+                    const walkIn = walkSec(ps.dist);
+                    const walkOut = walkSec(ts.stationDist);
                     const total = walkIn + ride.time + walkOut;
                     const i = ts.stationIdx;
-                    if (total >= opts[i].time - 1) return;
+                    const candidate = finish({
+                        time: total,
+                        km: ps.dist + ride.km + ts.stationDist,
+                        walkKm: ps.dist + ts.stationDist,
+                        mode: 'bus',
+                        legs: []
+                    });
+                    if (candidate.score >= opts[i].score - 1) return;
                     const corr = BUS_CORRIDOR_BY_NO[ps.no];
                     const legs = [];
                     if (ps.dist > 0.12) legs.push({ type: 'walk', from: point.name, to: ps.name, km: ps.dist, fromPt: { lat: point.lat, lng: point.lng }, toPt: { lat: ps.lat, lng: ps.lng } });
@@ -2556,7 +2651,8 @@
                         km: ride.km, time: ride.time, geo: ride.geo
                     });
                     if (ts.stationDist > 0.12) legs.push({ type: 'walk', from: ts.stop.name, to: ALL_STATIONS[i].name, km: ts.stationDist, fromPt: { lat: ts.stop.lat, lng: ts.stop.lng }, toPt: { lat: ALL_STATIONS[i].lat, lng: ALL_STATIONS[i].lng } });
-                    opts[i] = { time: total, km: ps.dist + ride.km + ts.stationDist, walkKm: ps.dist + ts.stationDist, mode: 'bus', legs };
+                    candidate.legs = legs;
+                    opts[i] = candidate;
                 });
             });
             return opts;
@@ -2604,7 +2700,7 @@
                 for (let i = lo; i < hi; i++) {
                     rideKm += haversineKm(line[i][1], line[i][0], line[i + 1][1], line[i + 1][0]);
                 }
-                const walkIn = sec(bd1, WALK_KMH), walkOut = sec(bd2, WALK_KMH);
+                const walkIn = walkSec(bd1), walkOut = walkSec(bd2);
                 const rideT = sec(rideKm, BUS_KMH, 360); // +6 min wait/board
                 const total = walkIn + rideT + walkOut;
                 if (!best || total < best.timeSec) {
@@ -2627,7 +2723,7 @@
 
         function walkPlan(from, to) {
             const km = haversineKm(from.lat, from.lng, to.lat, to.lng);
-            return { mode: 'walk', legs: [{ type: 'walk', from: from.name, to: to.name, km }], timeSec: sec(km, WALK_KMH), km, walkKm: km };
+            return { mode: 'walk', legs: [{ type: 'walk', from: from.name, to: to.name, km }], timeSec: walkSec(km), km, walkKm: km };
         }
 
         function fmtTime(secTotal) {
@@ -2647,14 +2743,25 @@
             return best ? { station: best, km: bestKm } : null;
         }
 
+        function planSignature(p) {
+            return (p.mode || '') + '|' + p.legs.map(l => l.type + ':' + (l.line || l.route || '') + ':' + l.from + '>' + l.to).join('|');
+        }
+
         function computeBestPlan(from, to) {
             const options = [walkPlan(from, to)];
-            const metro = metroPlan(from, to);
-            if (metro) options.push(metro);
-            const bus = busPlan(from, to);
-            if (bus) options.push(bus);
-            // fastest wins; tie-break = less walking
-            options.sort((a, b) => (a.timeSec - b.timeSec) || (a.walkKm - b.walkKm));
+            const seen = new Set([planSignature(options[0])]);
+            const push = p => {
+                if (!p) return;
+                const sig = planSignature(p);
+                if (seen.has(sig)) return;
+                seen.add(sig);
+                options.push(p);
+            };
+            push(metroPlan(from, to, 0));                    // fastest metro option
+            push(metroPlan(from, to, WALK_PENALTY_SEC));     // easy-on-feet metro variant
+            push(busPlan(from, to));
+            // fastest first; ties broken by least walking, then shortest distance
+            options.sort((a, b) => (a.timeSec - b.timeSec) || (a.walkKm - b.walkKm) || (a.km - b.km));
             return { best: options[0], options };
         }
 
@@ -2699,7 +2806,7 @@
 
         // ---- results UI
         function legText(l) {
-            if (l.type === 'walk') return `Walk to ${l.to} — ${fmtKm(l.km)} km (~${fmtTime(sec(l.km, WALK_KMH))})`;
+            if (l.type === 'walk') return `Walk to ${l.to} — ${fmtKm(l.km)} km (~${fmtTime(walkSec(l.km))})`;
             if (l.type === 'ride') {
                 const ln = METRO_LINES[l.line];
                 return `Take ${ln.name} from ${l.from} to ${l.to} — ${l.stops} stop${l.stops > 1 ? 's' : ''} (~${fmtTime(l.time)})`;
@@ -2751,10 +2858,13 @@
             html += `</ol></div>`;
             const alts = plan.options.slice(1);
             if (alts.length) {
-                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Slower / other options</div>`;
+                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Other options — fastest first, then least walking</div>`;
+                let leastWalk = null;
+                alts.forEach(o => { if (!leastWalk || o.walkKm < leastWalk.walkKm) leastWalk = o; });
                 alts.forEach(o => {
                     const lbl = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
-                    html += `<div class="flex justify-between text-[11px] text-slate-600 px-1"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></div>`;
+                    const easyTag = (leastWalk === o && o.walkKm + 0.2 < b.walkKm) ? ' • least walking' : '';
+                    html += `<div class="flex justify-between text-[11px] text-slate-600 px-1"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}${easyTag}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></div>`;
                 });
             }
             res.innerHTML = html;
@@ -2854,6 +2964,112 @@
             showToast('PDF downloaded');
         }
 
+        // ---- "from my location" GPS helpers
+        // Device GPS works without internet; the last fix is cached so the
+        // planner can still route offline.
+        const USER_LOC_KEY = 'riyadhTransitUserLoc';
+        let userLocation = null;
+        let userMarker = null;
+        let userLocPending = null;
+        let autoPlanSeq = 0;
+
+        function readCachedUserLocation() {
+            try {
+                const v = JSON.parse(localStorage.getItem(USER_LOC_KEY) || 'null');
+                if (v && isFinite(v.lat) && isFinite(v.lng)) return v;
+            } catch (e) { /* ignore */ }
+            return null;
+        }
+
+        function writeCachedUserLocation(u) {
+            try { localStorage.setItem(USER_LOC_KEY, JSON.stringify(u)); } catch (e) { /* ignore */ }
+        }
+
+        function updateUserMarker(u) {
+            if (!u || !isFinite(u.lat) || !isFinite(u.lng)) return;
+            if (!userMarker) {
+                const el = document.createElement('div');
+                el.className = 'user-blob';
+                el.innerHTML = '<div class="user-acc"></div><div class="user-dot"></div>';
+                userMarker = new maplibregl.Marker({ element: el, anchor: 'center' }).addTo(map);
+            }
+            userMarker.setLngLat([u.lng, u.lat]);
+        }
+
+        // Resolves with the best known position: fresh GPS fix, recent cache, or
+        // last known. Never rejects — returns null when location is unavailable.
+        function getUserPosition(opts = {}) {
+            const maxAge = opts.fresh ? 0 : 90000;
+            if (userLocation && Date.now() - userLocation.ts < maxAge) return Promise.resolve(userLocation);
+            const cached = readCachedUserLocation();
+            if (cached && Date.now() - cached.ts < maxAge) {
+                userLocation = cached;
+                return Promise.resolve(cached);
+            }
+            if (userLocPending) return userLocPending;
+            if (!navigator.geolocation) return Promise.resolve(userLocation || cached || null);
+            userLocPending = new Promise(resolve => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => {
+                        const u = {
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy || 0,
+                            ts: Date.now()
+                        };
+                        userLocation = u;
+                        writeCachedUserLocation(u);
+                        updateUserMarker(u);
+                        userLocPending = null;
+                        resolve(u);
+                    },
+                    () => {
+                        userLocPending = null;
+                        resolve(userLocation || cached || null);
+                    },
+                    { enableHighAccuracy: true, timeout: opts.timeout || 8000, maximumAge: opts.fresh ? 0 : 30000 }
+                );
+            });
+            return userLocPending;
+        }
+
+        function initUserLocation() {
+            const cached = readCachedUserLocation();
+            if (cached) { userLocation = cached; updateUserMarker(cached); }
+            getUserPosition({ timeout: 10000 }).then(u => { if (u) updateUserMarker(u); });
+        }
+
+        // Fill the planner From = my location / To = place and run it immediately.
+        function planToPlace(name, lat, lng, category, me) {
+            me = me || userLocation || readCachedUserLocation();
+            if (!me || !isFinite(me.lat) || !isFinite(me.lng)) return false;
+            if (activePopup) activePopup.remove();
+            planFromData = { name: 'My Location', lat: me.lat, lng: me.lng, kind: 'gps' };
+            planToData = { name, lat, lng, kind: category === 'Custom Pin' ? 'map' : 'place' };
+            document.getElementById('plan-from-input').value = 'My Location';
+            document.getElementById('plan-to-input').value = name;
+            placePlanMarker('from', me.lat, me.lng, '#059669', 'F');
+            placePlanMarker('to', lat, lng, '#0284c7', 'T');
+            document.getElementById('route-sheet').classList.add('hidden');
+            openPlanner();
+            return runPlanner();
+        }
+
+        // After any place selection, automatically route from where we are.
+        async function maybeAutoPlanFromMe(name, lat, lng, category) {
+            if (category === 'GPS Location' || name === 'My Current Location') return;
+            const seq = ++autoPlanSeq;
+            const me = await getUserPosition({ timeout: 9000 });
+            if (seq !== autoPlanSeq) return; // a newer tap superseded this one
+            if (!me) return; // route sheet keeps its "Directions from my location" button
+            if (haversineKm(me.lat, me.lng, lat, lng) < 0.05) return; // already here
+            try {
+                planToPlace(name, lat, lng, category, me);
+            } catch (e) {
+                console.warn('Auto plan from location failed:', e);
+            }
+        }
+
         // ---- wire planner UI
         document.getElementById('btn-plan-trip').addEventListener('click', () => {
             const p = document.getElementById('planner-panel');
@@ -2873,14 +3089,14 @@
                 if (planPickMarkers[k]) { planPickMarkers[k].remove(); delete planPickMarkers[k]; }
             });
         });
-        document.getElementById('plan-go-btn').addEventListener('click', () => {
+        function runPlanner() {
             lastPlan = null;
             document.getElementById('plan-results').classList.add('hidden');
             document.getElementById('plan-pdf-btn').classList.add('hidden');
             const f = resolveEndpoint(document.getElementById('plan-from-input').value, planFromData);
             const t = resolveEndpoint(document.getElementById('plan-to-input').value, planToData);
-            if (!f || !t) { showToast('Pick From and To from the suggestions'); return; }
-            if (Math.abs(f.lat - t.lat) < 0.0005 && Math.abs(f.lng - t.lng) < 0.0005) { showToast('From and To are the same place'); return; }
+            if (!f || !t) { showToast('Pick From and To from the suggestions'); return false; }
+            if (Math.abs(f.lat - t.lat) < 0.0005 && Math.abs(f.lng - t.lng) < 0.0005) { showToast('From and To are the same place'); return false; }
             const plan = computeBestPlan(f, t);
             plan._from = f; plan._to = t;
             lastPlan = plan;
@@ -2898,8 +3114,19 @@
                 all.forEach(c => bds.extend(c));
                 map.fitBounds(bds, { padding: 70, maxZoom: 13, duration: 800 });
             }
+            return true;
+        }
+        document.getElementById('plan-go-btn').addEventListener('click', runPlanner);
+        document.getElementById('plan-from-gps-btn').addEventListener('click', async () => {
+            const me = await getUserPosition({ fresh: true, timeout: 10000 });
+            if (!me) { showToast('Could not get your GPS location'); return; }
+            planFromData = { name: 'My Location', lat: me.lat, lng: me.lng, kind: 'gps' };
+            document.getElementById('plan-from-input').value = 'My Location';
+            placePlanMarker('from', me.lat, me.lng, '#059669', 'F');
+            showToast('From set to your current location');
         });
         document.getElementById('plan-pdf-btn').addEventListener('click', downloadPlanPdf);
+        initUserLocation();
         initHome();
 
 
