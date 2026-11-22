@@ -1,7 +1,7 @@
 /* Riyadh Metro & Bus Explorer — Service Worker
    Offline-first: caches the app shell, libraries, fonts and all Riyadh map tiles. */
 
-const VERSION = 'v24';
+const VERSION = 'v26';
 const SHELL_CACHE = 'riyadh-shell-' + VERSION;
 const RUNTIME_CACHE = 'riyadh-runtime-' + VERSION;
 const TILE_CACHE = 'riyadh-tiles-' + VERSION;

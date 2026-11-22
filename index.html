@@ -141,27 +141,7 @@
             font-size: 10px;
             font-weight: 900;
         }
-        /* "You are here" GPS marker */
-        .user-blob {
-            position: relative;
-            width: 20px;
-            height: 20px;
-        }
-        .user-dot {
-            position: absolute;
-            inset: 4px;
-            border-radius: 9999px;
-            background: #2563eb;
-            border: 3px solid #ffffff;
-            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.55);
-        }
-        .user-acc {
-            position: absolute;
-            inset: -38px;
-            border-radius: 9999px;
-            background: rgba(37, 99, 235, 0.13);
-            border: 2px solid rgba(37, 99, 235, 0.35);
-        }
+
 
     </style>
 </head>
@@ -199,6 +179,13 @@
                     class="p-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 transition shrink-0">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                </button>
+                <button id="btn-settings" title="Settings — AI key"
+                    class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 transition shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                 </button>
             </div>
@@ -262,12 +249,6 @@
                 <div class="mt-0.5 flex gap-1.5">
                     <input id="plan-from-input" type="text" autocomplete="off" placeholder="Station, place, bus stop or map point..."
                         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                    <button id="plan-from-gps-btn" type="button" title="Use my current GPS location"
-                        class="w-9 shrink-0 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06z" />
-                        </svg>
-                    </button>
                     <button id="plan-from-map-btn" type="button" title="Choose From on the map"
                         class="w-9 shrink-0 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition flex items-center justify-center">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -322,11 +303,53 @@
                 Plan Route
             </button>
 
+            <!-- AI Assistant (Gemini — needs API key from Settings) -->
+            <div class="rounded-2xl border border-violet-200 bg-violet-50/70 p-2.5 space-y-1.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-violet-800">AI Assistant</span>
+                    <span id="plan-ai-status" class="text-[9px] font-semibold text-violet-500">no key</span>
+                </div>
+                <div class="flex gap-1.5">
+                    <input id="plan-ai-input" type="text" autocomplete="off" placeholder="e.g. fastest way to Granada Mall, less walking"
+                        class="w-full bg-white border border-violet-200 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    <button id="plan-ai-btn" type="button" class="px-2.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-extrabold transition shrink-0">Ask</button>
+                </div>
+                <div class="text-[9px] leading-snug text-violet-700/70">Describe your trip in plain words — needs a free Gemini key from Settings ⚙</div>
+            </div>
+
             <div id="plan-results" class="hidden space-y-2"></div>
 
             <button id="plan-pdf-btn" class="hidden w-full px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold transition shadow-sm">
                 Download PDF Directions
             </button>
+        </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- SETTINGS PANEL — Gemini API key for the AI assistant                    -->
+    <!-- ======================================================================= -->
+    <section id="settings-panel" class="hidden fixed top-20 right-3 sm:right-4 z-40 w-[min(92vw,320px)] bg-white/98 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-900/20 border border-slate-200/90 p-4">
+        <div class="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
+            <div>
+                <h2 class="font-extrabold text-slate-900 text-sm">Settings</h2>
+                <p class="text-[10px] text-slate-400">AI assistant key</p>
+            </div>
+            <button id="settings-close-btn" class="p-1.5 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition" title="Close">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div class="pt-3 space-y-2">
+            <label class="text-[10px] font-bold uppercase tracking-wider text-violet-800">Gemini API Key</label>
+            <input id="gemini-key-input" type="password" autocomplete="off" placeholder="Paste key from aistudio.google.com"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            <div class="flex gap-1.5">
+                <button id="gemini-key-save" class="flex-1 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-extrabold transition">Save Key</button>
+                <button id="gemini-key-clear" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-600 text-[11px] font-bold transition">Clear</button>
+            </div>
+            <div id="gemini-key-status" class="text-[10px] font-semibold text-slate-500">No key saved — the planner works fine without it</div>
+            <p class="text-[10px] leading-snug text-slate-400">Get a free key at Google AI Studio → "Get API key". Stored only on this device, never sent anywhere except Google's API.</p>
         </div>
     </section>
 
@@ -1064,12 +1087,12 @@
                     id: 'plan-ride-layer',
                     type: 'line',
                     source: 'plan-geo',
-                    filter: ['==', ['get', 'kind'], 'ride'],
+                    filter: ['match', ['get', 'kind'], 'ride', true, 'car', true, false],
                     layout: { 'line-join': 'round', 'line-cap': 'round' },
                     paint: {
                         'line-color': ['get', 'color'],
-                        'line-width': 6,
-                        'line-opacity': 0.95
+                        'line-width': ['match', ['get', 'kind'], 'car', 3.5, 6],
+                        'line-opacity': ['match', ['get', 'kind'], 'car', 0.85, 0.95]
                     }
                 });
             }
@@ -1329,7 +1352,7 @@
             if (stFromMe) {
                 stFromMe.addEventListener('click', () => {
                     if (activePopup) activePopup.remove();
-                    planToPlace(props.name, coords[1], coords[0], 'Metro Station');
+                    planFromHome(props.name, coords[1], coords[0], 'Metro Station');
                 });
             }
         });
@@ -1430,7 +1453,7 @@
             if (stopFromMe) {
                 stopFromMe.addEventListener('click', () => {
                     if (activePopup) activePopup.remove();
-                    planToPlace(p.n || 'Bus stop', e.lngLat.lat, e.lngLat.lng, 'Bus stop');
+                    planFromHome(p.n || 'Bus stop', e.lngLat.lat, e.lngLat.lng, 'Bus stop');
                 });
             }
 
@@ -1657,27 +1680,17 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
-                    Directions from my location
+                    Directions from Home
                 </button>
             `;
 
             const fromMeBtn = document.getElementById('btn-plan-from-me');
             if (fromMeBtn) {
-                fromMeBtn.addEventListener('click', async () => {
-                    fromMeBtn.disabled = true;
-                    const prevHtml = fromMeBtn.innerHTML;
-                    fromMeBtn.innerHTML = 'Locating you…';
-                    const me = await getUserPosition({ fresh: true, timeout: 10000 });
-                    fromMeBtn.disabled = false;
-                    fromMeBtn.innerHTML = prevHtml;
-                    let ok = false;
-                    try {
-                        ok = planToPlace(name, lat, lng, category, me);
-                    } catch (e) {
-                        console.warn('Plan from location failed:', e);
-                    }
+                fromMeBtn.addEventListener('click', () => {
+                    const ok = planFromHome(name, lat, lng, category);
                     if (!ok) {
-                        showToast('Could not plan route — check location permission');
+                        openPlanner();
+                        showToast('Set your Home in the Trip Planner first');
                     }
                 });
             }
@@ -1827,8 +1840,14 @@
                 }
             });
 
-            // Automatically route from the user's GPS position to this place
-            maybeAutoPlanFromMe(name, lat, lng, category);
+            // Automatically route from Home to this place when Home is set
+            if (homeLocation && category !== 'GPS Location' && name !== 'My Current Location') {
+                try {
+                    planFromHome(name, lat, lng, category);
+                } catch (e) {
+                    console.warn('Auto plan from Home failed:', e);
+                }
+            }
         }
 
         // Tap anywhere on Riyadh map to drop a destination pin & find closest Metro
@@ -2151,6 +2170,13 @@
         let lastPlan = null;
 
         function openPlanner() {
+            // Default From = saved Home whenever the planner opens empty
+            const fi = document.getElementById('plan-from-input');
+            if (homeLocation && !fi.value.trim()) {
+                fi.value = 'Home';
+                planFromData = homeEndpoint();
+                placePlanMarker('from', homeLocation.lat, homeLocation.lng, '#f59e0b', 'H');
+            }
             document.getElementById('planner-panel').classList.remove('hidden');
         }
         function closePlanner() {
@@ -2168,6 +2194,8 @@
         let firebaseReady = false;
         const planPickMarkers = {};
         const HOME_LS_KEY = 'riyadhTransitHome';
+        const GEMINI_LS_KEY = 'riyadhTransitGeminiKey';
+        const GEMINI_MODEL = 'gemini-2.5-flash';
 
         function firebaseConfigReady() {
             const cfg = window.RIYADH_FIREBASE_CONFIG || {};
@@ -2269,6 +2297,52 @@
         function homeEndpoint() {
             if (!homeLocation) return null;
             return { name: 'Home', lat: homeLocation.lat, lng: homeLocation.lng, kind: 'home' };
+        }
+
+        // =======================================================================
+        // GEMINI AI ASSISTANT (optional — needs user's own API key)
+        // =======================================================================
+        function geminiKey() { return localStorage.getItem(GEMINI_LS_KEY) || ''; }
+
+        function updateAiStatus() {
+            const el = document.getElementById('plan-ai-status');
+            if (el) el.textContent = geminiKey() ? 'key saved' : 'no key';
+        }
+
+        async function askGemini(prompt) {
+            const key = geminiKey();
+            if (!key) return { error: 'no-key' };
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+                })
+            });
+            if (!res.ok) {
+                const detail = (await res.text().catch(() => '')).slice(0, 160);
+                return { error: 'api', status: res.status, detail };
+            }
+            const data = await res.json();
+            const txt = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            try { return { json: JSON.parse(txt) }; }
+            catch (e) { return { error: 'parse', raw: txt.slice(0, 160) }; }
+        }
+
+        function buildAiPrompt(q) {
+            const places = RIYADH_PLACES.map(p => `${p.name} (${p.cat})`).join(' | ');
+            const stations = ALL_STATIONS.map(s => s.name).join(' | ');
+            return `You are a transit assistant for Riyadh, Saudi Arabia (metro + bus). The user describes a trip in plain words.
+Reply ONLY with JSON, no markdown: {"from": string|null, "to": string, "tip": string}
+Rules:
+- "from"/"to" must be copied EXACTLY from the lists below, or "Home". Use null for "from" if the user didn't specify a start (means use their saved Home).
+- "to" is required; pick the best match for what the user wants (respect preferences like "fastest", "less walking", "near me").
+- "tip" = ONE short practical sentence: which metro line(s)/bus, how much walking, or a warning.
+Known places: ${places}
+Metro stations: ${stations}
+User request: ${q}`;
         }
 
         function placePlanMarker(key, lat, lng, color, label) {
@@ -2464,13 +2538,14 @@
             }
         }
 
-        function metroPlan(from, to, walkPenalty = 0) {
-            // Access = best way to reach each station (walk or bus feeder).
+        function metroPlan(from, to, walkPenalty = 0, allowCar = true) {
+            // Access = best way to reach each station (walk, bus feeder or car drop-off).
             // Egress = best way to leave each station toward the destination.
             // walkPenalty > 0 produces the "easy-on-feet" variant: the search
             // minimizes time + penalty*walking, avoiding needless walks.
-            const access = computeEndpointOptions(from, walkPenalty);
-            const egress = reverseOptions(computeEndpointOptions(to, walkPenalty));
+            // allowCar=false gives the no-car-needed alternative.
+            const access = computeEndpointOptions(from, walkPenalty, allowCar);
+            const egress = reverseOptions(computeEndpointOptions(to, walkPenalty, allowCar));
 
             const N = ALL_STATIONS.length;
             const distS = new Array(N).fill(Infinity); // penalized score — drives the search
@@ -2543,6 +2618,7 @@
 
             const hasRide = legs.some(l => l.type === 'ride');
             const hasBus = legs.some(l => l.type === 'bus');
+            const hasCar = legs.some(l => l.type === 'car');
             if (!hasRide) return null;
 
             // transfer penalty: metro line changes only
@@ -2558,7 +2634,7 @@
             const walkKm = legs.filter(l => l.type === 'walk').reduce((a, l) => a + l.km, 0);
             const usedLines = [...new Set(legs.filter(l => l.type === 'ride').map(l => l.line))];
             return {
-                mode: hasBus ? 'mixed' : 'metro', legs, timeSec: totalTime, km: totalKm, walkKm, transfers,
+                mode: hasBus ? 'mixed' : (hasCar ? 'drive' : 'metro'), legs, timeSec: totalTime, km: totalKm, walkKm, transfers,
                 board: firstSt, alight: lastSt, lines: usedLines,
                 accessMode: access[entryIdx].mode, egressMode: egress[exitIdx].mode
             };
@@ -2638,7 +2714,7 @@
         // stop that feeds that station. Returns one option per station index.
         // walkPenalty > 0 ranks options by time + penalty*walking (score), so the
         // "easy-on-feet" metro variant prefers less walking when times are close.
-        function computeEndpointOptions(point, walkPenalty = 0) {
+        function computeEndpointOptions(point, walkPenalty = 0, allowCar = true) {
             const finish = o => { o.score = o.time + o.walkKm * walkPenalty; return o; };
             const opts = ALL_STATIONS.map((s, i) => {
                 const d = haversineKm(point.lat, point.lng, s.lat, s.lng);
@@ -2686,12 +2762,34 @@
                     opts[i] = candidate;
                 });
             });
+
+            // Car drop-off: someone drives you (or you drive) to the station.
+            // ~30 km/h city driving + 5 min parking/wait. Only worth it >0.8 km.
+            if (allowCar) ALL_STATIONS.forEach((s, i) => {
+                if (opts[i].mode === 'car') return;
+                const d = haversineKm(point.lat, point.lng, s.lat, s.lng);
+                if (d < 0.8) return;
+                const carKm = d * 1.3;
+                const carTime = sec(carKm, 30) + 300;
+                const candidate = finish({
+                    time: carTime,
+                    km: carKm,
+                    walkKm: 0,
+                    mode: 'car',
+                    legs: [{
+                        type: 'car', from: point.name, to: s.name, km: carKm, time: carTime,
+                        fromPt: { lat: point.lat, lng: point.lng }, toPt: { lat: s.lat, lng: s.lng }
+                    }]
+                });
+                if (candidate.score < opts[i].score - 1) opts[i] = candidate;
+            });
             return opts;
         }
 
         function reverseLegs(legs) {
             return legs.slice().reverse().map(l => {
                 if (l.type === 'walk') return { type: 'walk', from: l.to, to: l.from, km: l.km, fromPt: l.toPt, toPt: l.fromPt };
+                if (l.type === 'car') return { type: 'car', from: l.to, to: l.from, km: l.km, time: l.time, fromPt: l.toPt, toPt: l.fromPt };
                 if (l.type === 'bus') return { type: 'bus', route: l.route, routeName: l.routeName, color: l.color, from: l.to, to: l.from, km: l.km, time: l.time, geo: l.geo ? l.geo.slice().reverse() : undefined };
                 return l;
             });
@@ -2779,8 +2877,9 @@
         }
 
         function computeBestPlan(from, to) {
-            const options = [walkPlan(from, to)];
-            const seen = new Set([planSignature(options[0])]);
+            const walk = walkPlan(from, to);
+            const options = [walk];
+            const seen = new Set([planSignature(walk)]);
             const push = p => {
                 if (!p) return;
                 const sig = planSignature(p);
@@ -2788,11 +2887,21 @@
                 seen.add(sig);
                 options.push(p);
             };
-            push(metroPlan(from, to, 0));                    // fastest metro option
-            push(metroPlan(from, to, WALK_PENALTY_SEC));     // easy-on-feet metro variant
+            push(metroPlan(from, to, 0, true));               // fastest overall (car drop-off allowed)
+            push(metroPlan(from, to, 0, false));              // fastest without a car
+            push(metroPlan(from, to, WALK_PENALTY_SEC, false));// easy-on-feet, no car needed
             push(busPlan(from, to));
             // fastest first; ties broken by least walking, then shortest distance
             options.sort((a, b) => (a.timeSec - b.timeSec) || (a.walkKm - b.walkKm) || (a.km - b.km));
+            // sanity check: for short hops only keep transit that is dramatically
+            // faster — nobody should be told to catch a bus for an 800 m trip
+            if (walk.km < 2) {
+                const kept = options.filter(o => o === walk || o.timeSec < walk.timeSec * 0.6);
+                if (kept.length) {
+                    options.length = 0;
+                    options.push(...kept);
+                }
+            }
             return { best: options[0], options };
         }
 
@@ -2815,6 +2924,9 @@
                             const coords = lineObj.stations.slice(lo, hi + 1).map(s => [s.lng, s.lat]);
                             feats.push({ type: 'Feature', properties: { kind: 'ride', color: lineObj.color }, geometry: { type: 'LineString', coordinates: coords } });
                         }
+                    } else if (l.type === 'car') {
+                        const a = l.fromPt, b = l.toPt;
+                        if (a && b) feats.push({ type: 'Feature', properties: { kind: 'car', color: '#0f172a' }, geometry: { type: 'LineString', coordinates: [[a.lng, a.lat], [b.lng, b.lat]] } });
                     } else if (l.type === 'bus' && l.geo) {
                         feats.push({ type: 'Feature', properties: { kind: 'ride', color: l.color || '#f59e0b' }, geometry: { type: 'LineString', coordinates: l.geo } });
                     }
@@ -2842,6 +2954,7 @@
                 const ln = METRO_LINES[l.line];
                 return `Take ${ln.name} from ${l.from} to ${l.to} — ${l.stops} stop${l.stops > 1 ? 's' : ''} (~${fmtTime(l.time)})`;
             }
+            if (l.type === 'car') return `Drive to ${l.to} — ${fmtKm(l.km)} km (~${fmtTime(l.time)}) — car drop-off`;
             if (l.type === 'bus') return `Take BUS ${l.route} from ${l.from} to ${l.to} (~${fmtTime(l.time)})`;
             return '';
         }
@@ -2849,10 +2962,10 @@
         function renderPlan(plan) {
             const res = document.getElementById('plan-results');
             const b = plan.best;
-            const modeLabel = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walk' }[b.mode] || 'Route';
+            const modeLabel = { metro: 'Metro', mixed: 'Metro + Bus', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walk' }[b.mode] || 'Route';
 
             let boardText = 'Walking only — no metro or bus ride needed';
-            if ((b.mode === 'metro' || b.mode === 'mixed') && b.board && b.alight && b.lines && b.lines.length) {
+            if ((b.mode === 'metro' || b.mode === 'mixed' || b.mode === 'drive') && b.board && b.alight && b.lines && b.lines.length) {
                 const lineNames = (b.lines || []).map(id => METRO_LINES[id].shortName).join(' → ');
                 boardText = `Board at <b>${b.board.name}</b> • ${lineNames} • Get off at <b>${b.alight.name}</b>`;
             } else if (b.mode === 'bus' && b.board && b.alight) {
@@ -2893,7 +3006,7 @@
                 let leastWalk = null;
                 alts.forEach(o => { if (!leastWalk || o.walkKm < leastWalk.walkKm) leastWalk = o; });
                 alts.forEach(o => {
-                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
+                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
                     const easyTag = (leastWalk === o && o.walkKm + 0.2 < b.walkKm) ? ' • least walking' : '';
                     html += `<div class="flex justify-between text-[11px] text-slate-600 px-1"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}${easyTag}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></div>`;
                 });
@@ -2995,110 +3108,24 @@
             showToast('PDF downloaded');
         }
 
-        // ---- "from my location" GPS helpers
-        // Device GPS works without internet; the last fix is cached so the
-        // planner can still route offline.
-        const USER_LOC_KEY = 'riyadhTransitUserLoc';
-        let userLocation = null;
-        let userMarker = null;
-        let userLocPending = null;
-        let autoPlanSeq = 0;
+        // ---- "from Home" auto-planner
+        // Home is saved on-device (and Firebase-synced when configured), so this
+        // works fully offline — no GPS or internet needed.
 
-        function readCachedUserLocation() {
-            try {
-                const v = JSON.parse(localStorage.getItem(USER_LOC_KEY) || 'null');
-                if (v && isFinite(v.lat) && isFinite(v.lng)) return v;
-            } catch (e) { /* ignore */ }
-            return null;
-        }
-
-        function writeCachedUserLocation(u) {
-            try { localStorage.setItem(USER_LOC_KEY, JSON.stringify(u)); } catch (e) { /* ignore */ }
-        }
-
-        function updateUserMarker(u) {
-            if (!u || !isFinite(u.lat) || !isFinite(u.lng)) return;
-            if (!userMarker) {
-                const el = document.createElement('div');
-                el.className = 'user-blob';
-                el.innerHTML = '<div class="user-acc"></div><div class="user-dot"></div>';
-                userMarker = new maplibregl.Marker({ element: el, anchor: 'center' }).addTo(map);
-            }
-            userMarker.setLngLat([u.lng, u.lat]);
-        }
-
-        // Resolves with the best known position: fresh GPS fix, recent cache, or
-        // last known. Never rejects — returns null when location is unavailable.
-        function getUserPosition(opts = {}) {
-            const maxAge = opts.fresh ? 0 : 90000;
-            if (userLocation && Date.now() - userLocation.ts < maxAge) return Promise.resolve(userLocation);
-            const cached = readCachedUserLocation();
-            if (cached && Date.now() - cached.ts < maxAge) {
-                userLocation = cached;
-                return Promise.resolve(cached);
-            }
-            if (userLocPending) return userLocPending;
-            if (!navigator.geolocation) return Promise.resolve(userLocation || cached || null);
-            userLocPending = new Promise(resolve => {
-                navigator.geolocation.getCurrentPosition(
-                    pos => {
-                        const u = {
-                            lat: pos.coords.latitude,
-                            lng: pos.coords.longitude,
-                            accuracy: pos.coords.accuracy || 0,
-                            ts: Date.now()
-                        };
-                        userLocation = u;
-                        writeCachedUserLocation(u);
-                        updateUserMarker(u);
-                        userLocPending = null;
-                        resolve(u);
-                    },
-                    () => {
-                        userLocPending = null;
-                        resolve(userLocation || cached || null);
-                    },
-                    { enableHighAccuracy: true, timeout: opts.timeout || 8000, maximumAge: opts.fresh ? 0 : 30000 }
-                );
-            });
-            return userLocPending;
-        }
-
-        function initUserLocation() {
-            const cached = readCachedUserLocation();
-            if (cached) { userLocation = cached; updateUserMarker(cached); }
-            getUserPosition({ timeout: 10000 }).then(u => { if (u) updateUserMarker(u); });
-        }
-
-        // Fill the planner From = my location / To = place and run it immediately.
-        function planToPlace(name, lat, lng, category, me) {
-            me = me || userLocation || readCachedUserLocation();
-            if (!me || !isFinite(me.lat) || !isFinite(me.lng)) return false;
+        // Fill the planner From = Home / To = place and run it immediately.
+        function planFromHome(name, lat, lng, category) {
+            const home = homeEndpoint();
+            if (!home) return false;
             if (activePopup) activePopup.remove();
-            planFromData = { name: 'My Location', lat: me.lat, lng: me.lng, kind: 'gps' };
+            planFromData = home;
             planToData = { name, lat, lng, kind: category === 'Custom Pin' ? 'map' : 'place' };
-            document.getElementById('plan-from-input').value = 'My Location';
+            document.getElementById('plan-from-input').value = 'Home';
             document.getElementById('plan-to-input').value = name;
-            placePlanMarker('from', me.lat, me.lng, '#059669', 'F');
+            placePlanMarker('from', home.lat, home.lng, '#f59e0b', 'H');
             placePlanMarker('to', lat, lng, '#0284c7', 'T');
             document.getElementById('route-sheet').classList.add('hidden');
             openPlanner();
             return runPlanner();
-        }
-
-        // After any place selection, automatically route from where we are.
-        async function maybeAutoPlanFromMe(name, lat, lng, category) {
-            if (category === 'GPS Location' || name === 'My Current Location') return;
-            const seq = ++autoPlanSeq;
-            const me = await getUserPosition({ timeout: 9000 });
-            if (seq !== autoPlanSeq) return; // a newer tap superseded this one
-            if (!me) return; // route sheet keeps its "Directions from my location" button
-            if (haversineKm(me.lat, me.lng, lat, lng) < 0.05) return; // already here
-            try {
-                planToPlace(name, lat, lng, category, me);
-            } catch (e) {
-                console.warn('Auto plan from location failed:', e);
-            }
         }
 
         // ---- wire planner UI
@@ -3138,6 +3165,7 @@
             plan.best.legs.forEach(l => {
                 if (l.type === 'walk') { const a = resolveLegPoint(l.from, plan), b = resolveLegPoint(l.to, plan); if (a) all.push([a.lng, a.lat]); if (b) all.push([b.lng, b.lat]); }
                 else if (l.type === 'ride') { const lo = METRO_LINES[l.line]; if (lo) lo.stations.forEach(s => all.push([s.lng, s.lat])); }
+                else if (l.type === 'car') { if (l.fromPt) all.push([l.fromPt.lng, l.fromPt.lat]); if (l.toPt) all.push([l.toPt.lng, l.toPt.lat]); }
                 else if (l.type === 'bus' && l.geo) l.geo.forEach(c => all.push(c));
             });
             if (all.length) {
@@ -3148,16 +3176,77 @@
             return true;
         }
         document.getElementById('plan-go-btn').addEventListener('click', runPlanner);
-        document.getElementById('plan-from-gps-btn').addEventListener('click', async () => {
-            const me = await getUserPosition({ fresh: true, timeout: 10000 });
-            if (!me) { showToast('Could not get your GPS location'); return; }
-            planFromData = { name: 'My Location', lat: me.lat, lng: me.lng, kind: 'gps' };
-            document.getElementById('plan-from-input').value = 'My Location';
-            placePlanMarker('from', me.lat, me.lng, '#059669', 'F');
-            showToast('From set to your current location');
-        });
         document.getElementById('plan-pdf-btn').addEventListener('click', downloadPlanPdf);
-        initUserLocation();
+
+        // ---- settings gear (Gemini key) ----
+        document.getElementById('btn-settings').addEventListener('click', () => {
+            document.getElementById('settings-panel').classList.toggle('hidden');
+        });
+        document.getElementById('settings-close-btn').addEventListener('click', () => {
+            document.getElementById('settings-panel').classList.add('hidden');
+        });
+        const geminiInput = document.getElementById('gemini-key-input');
+        geminiInput.value = geminiKey();
+        geminiInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('gemini-key-save').click(); });
+        document.getElementById('gemini-key-save').addEventListener('click', () => {
+            const v = geminiInput.value.trim();
+            if (v) localStorage.setItem(GEMINI_LS_KEY, v);
+            document.getElementById('gemini-key-status').textContent = v ? 'Key saved on this device' : 'No key saved — planner works fine without it';
+            updateAiStatus();
+            if (v) document.getElementById('settings-panel').classList.add('hidden');
+        });
+        document.getElementById('gemini-key-clear').addEventListener('click', () => {
+            localStorage.removeItem(GEMINI_LS_KEY);
+            geminiInput.value = '';
+            document.getElementById('gemini-key-status').textContent = 'Key cleared';
+            updateAiStatus();
+        });
+        updateAiStatus();
+
+        // ---- AI assistant ----
+        async function runAiPlan() {
+            const input = document.getElementById('plan-ai-input');
+            const q = input.value.trim();
+            if (!q) return;
+            if (!geminiKey()) {
+                document.getElementById('settings-panel').classList.remove('hidden');
+                showToast('Add your Gemini API key in Settings first');
+                return;
+            }
+            const btn = document.getElementById('plan-ai-btn');
+            btn.disabled = true;
+            btn.textContent = '…';
+            try {
+                const r = await askGemini(buildAiPrompt(q));
+                if (r.error === 'api') { showToast(`AI error ${r.status} — check your key/quota`); return; }
+                if (r.error) { showToast('AI could not answer — try again'); return; }
+                const j = r.json || {};
+                let f = resolveEndpoint(document.getElementById('plan-from-input').value, planFromData);
+                let t = resolveEndpoint(document.getElementById('plan-to-input').value, planToData);
+                if (j.from) {
+                    const d = resolveEndpoint(String(j.from), null);
+                    if (d) { f = d; planFromData = d; document.getElementById('plan-from-input').value = d.name; }
+                } else if (!f) {
+                    f = homeEndpoint();
+                    if (f) { planFromData = f; document.getElementById('plan-from-input').value = f.name; }
+                }
+                if (j.to) {
+                    const d = resolveEndpoint(String(j.to), null);
+                    if (d) { t = d; planToData = d; document.getElementById('plan-to-input').value = d.name; }
+                }
+                if (!f || !t) { showToast('AI answered but I could not match the places — try naming a mall or station'); return; }
+                if (runPlanner()) {
+                    input.value = '';
+                    if (j.tip) showToast(String(j.tip).slice(0, 140));
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Ask';
+            }
+        }
+        document.getElementById('plan-ai-btn').addEventListener('click', runAiPlan);
+        document.getElementById('plan-ai-input').addEventListener('keydown', e => { if (e.key === 'Enter') runAiPlan(); });
+
         initHome();
 
 
