@@ -3374,7 +3374,14 @@ User request: ${q}`;
             if (l.type === 'walk') return `Walk to ${l.to} — ${fmtKm(l.km)} km (~${fmtTime(walkSec(l.km))})`;
             if (l.type === 'ride') {
                 const ln = METRO_LINES[l.line];
-                return `Take ${ln.name} from ${l.from} to ${l.to} — ${l.stops} stop${l.stops > 1 ? 's' : ''} (~${fmtTime(l.time)})`;
+                const names = ln.stations.map(s => s.name);
+                const i1 = names.indexOf(l.from), i2 = names.indexOf(l.to);
+                let dir = '';
+                if (i1 >= 0 && i2 >= 0 && i1 !== i2) {
+                    const term = i2 > i1 ? ln.stations[ln.stations.length - 1].name : ln.stations[0].name;
+                    dir = ` <span class="text-sky-700 font-extrabold">toward ${term}</span>`;
+                }
+                return `Take ${ln.name} from ${l.from} to ${l.to}${dir} — ${l.stops} stop${l.stops > 1 ? 's' : ''} (~${fmtTime(l.time)})`;
             }
             if (l.type === 'car') return `Drive to ${l.to} — ${fmtKm(l.km)} km (~${fmtTime(l.time)}) — car drop-off`;
             if (l.type === 'bus') return `Take BUS ${l.route} from ${l.from} to ${l.to} (~${fmtTime(l.time)})`;
@@ -3426,6 +3433,51 @@ User request: ${q}`;
             applyLayerFilters();
         }
 
+        // Change a ride leg's boarding/alighting station to any station on that line
+        function setRideEndpoint(plan, legIdx, which, stationName) {
+            const leg = plan.best.legs[legIdx];
+            if (!leg || leg.type !== 'ride') return;
+            const lineObj = METRO_LINES[leg.line];
+            if (!lineObj) return;
+            const names = lineObj.stations.map(s => s.name);
+            const oldFrom = leg.from, oldTo = leg.to;
+            if (which === 'from') leg.from = stationName; else leg.to = stationName;
+            const a = names.indexOf(leg.from), b = names.indexOf(leg.to);
+            if (a < 0 || b < 0 || a === b) {
+                if (which === 'from') leg.from = oldFrom; else leg.to = oldTo;
+                showToast('Pick a different station on this line');
+                return;
+            }
+            // keep the connecting walk/car/bus legs consistent
+            if (which === 'from') {
+                for (let k = legIdx - 1; k >= 0; k--) {
+                    const p = plan.best.legs[k];
+                    if (p.to === oldFrom) { p.to = stationName; break; }
+                    if (p.type === 'ride') break;
+                }
+            } else {
+                for (let k = legIdx + 1; k < plan.best.legs.length; k++) {
+                    const p = plan.best.legs[k];
+                    if (p.from === oldTo) { p.from = stationName; break; }
+                    if (p.type === 'ride') break;
+                }
+            }
+            // rebuild leg distance/time along the official line stations
+            const lo = Math.min(a, b), hi = Math.max(a, b);
+            leg.stops = Math.abs(b - a);
+            leg.km = 0; leg.time = 0;
+            for (let k = lo; k < hi; k++) {
+                const s1 = lineObj.stations[k], s2 = lineObj.stations[k + 1];
+                const d = haversineKm(s1.lat, s1.lng, s2.lat, s2.lng);
+                leg.km += d;
+                leg.time += (s2.t && s2.t > 0) ? s2.t : sec(d, METRO_KMH, 25);
+            }
+            recomputePlanTimes(plan);
+            drawPlan(plan);
+            renderPlan(plan);
+            showToast(`Now ${which === 'from' ? 'boarding' : 'alighting'} at ${stationName}`);
+        }
+
         function renderPlan(plan) {
             const res = document.getElementById('plan-results');
             const b = plan.best;
@@ -3468,6 +3520,18 @@ User request: ${q}`;
                 if (editable) {
                     const lt = l.type === 'walk' ? `Walk to ${l.to}` : `Drive to ${l.to}`;
                     html += `<li class="flex gap-1.5 items-center text-[11px] text-slate-700"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span class="flex-1">${lt} • ≈${fmtTime(legTimeSec(l))}</span><input type="number" step="0.1" min="0" inputmode="decimal" data-leg-km="${i}" value="${l.km.toFixed(1)}" class="leg-km-input w-14 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 text-[11px] font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-sky-400" /><span class="text-[10px] text-slate-400 font-semibold">km</span></li>`;
+                } else if (l.type === 'ride') {
+                    const lo = METRO_LINES[l.line];
+                    const mkOpts = sel => lo.stations.map(s =>
+                        `<option value="${s.name}" ${s.name === sel ? 'selected' : ''}>${s.name}</option>`).join('');
+                    html += `<li class="text-[11px] text-slate-700">
+                        <div class="flex gap-1.5"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span class="flex-1">${legText(l)}</span></div>
+                        <div class="flex gap-1 mt-1 ml-5">
+                            <select data-leg-ride="${i}" data-end="from" title="Change boarding station" class="ride-end flex-1 min-w-0 bg-sky-50 border border-sky-200 rounded-lg px-1 py-0.5 text-[9px] font-bold text-slate-700">${mkOpts(l.from)}</select>
+                            <select data-leg-ride="${i}" data-end="to" title="Change alighting station" class="ride-end flex-1 min-w-0 bg-emerald-50 border border-emerald-200 rounded-lg px-1 py-0.5 text-[9px] font-bold text-slate-700">${mkOpts(l.to)}</select>
+                        </div>
+                        <div class="text-[8px] text-slate-400 ml-5 mt-0.5">tap to change boarding / alighting station</div>
+                    </li>`;
                 } else {
                     html += `<li class="flex gap-1.5 text-[11px] text-slate-700"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span>${legText(l)}</span></li>`;
                 }
@@ -3508,6 +3572,13 @@ User request: ${q}`;
                 btn.addEventListener('click', () => {
                     const opt = plan.options[Number(btn.dataset.planIdx)];
                     if (opt) selectPlanOption(opt);
+                });
+            });
+            res.querySelectorAll('.ride-end').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    const idx = Number(sel.dataset.legRide);
+                    const leg = plan.best.legs[idx];
+                    if (leg) setRideEndpoint(plan, idx, sel.dataset.end, sel.value);
                 });
             });
             res.querySelectorAll('.leg-km-input').forEach(inp => {
@@ -3669,7 +3740,7 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             }
             body.push('');
             b.legs.forEach((l, i) => {
-                wrapPdf(`${i + 1}. ${legText(l)}`, 95).forEach(w => body.push('   ' + w));
+                wrapPdf(`${i + 1}. ${legText(l).replace(/<[^>]+>/g, '')}`, 95).forEach(w => body.push('   ' + w));
             });
             body.push('');
             const alts = plan.options.filter(o => o !== b);
@@ -3900,7 +3971,14 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             if (l.type === 'walk') return `Walk to <b>${l.to}</b>`;
             if (l.type === 'ride') {
                 const ln = METRO_LINES[l.line];
-                return `Take <b>${ln ? ln.shortName : l.line}</b> — stay on until <b>${l.to}</b>`;
+                const names = ln ? ln.stations.map(s => s.name) : [];
+                const i1 = names.indexOf(l.from), i2 = names.indexOf(l.to);
+                let dir = '';
+                if (ln && i1 >= 0 && i2 >= 0 && i1 !== i2) {
+                    const term = i2 > i1 ? ln.stations[ln.stations.length - 1].name : ln.stations[0].name;
+                    dir = ` <span class="text-sky-300 font-extrabold">toward ${term}</span>`;
+                }
+                return `Take <b>${ln ? ln.shortName : l.line}</b>${dir} — stay on until <b>${l.to}</b>`;
             }
             if (l.type === 'car') return `Drive to <b>${l.to}</b>`;
             if (l.type === 'bus') return `Take <b>BUS ${l.route}</b> until <b>${l.to}</b>`;
