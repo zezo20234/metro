@@ -227,6 +227,44 @@
         </div>
     </section>
 
+    <!-- NEXT-TRAIN COUNTDOWN CARD (appears when a metro station is tapped) -->
+    <section id="train-card" class="hidden fixed left-3 right-3 sm:left-auto sm:right-4 sm:w-[300px] bottom-[136px] sm:bottom-6 z-30 bg-white/98 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-900/20 border border-slate-200/90 p-3 transition-all">
+        <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+            <div class="min-w-0">
+                <div class="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Next trains · est.</div>
+                <div id="train-card-title" class="font-extrabold text-slate-900 text-xs truncate">Station</div>
+            </div>
+            <button id="train-card-close" class="p-1.5 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition shrink-0" title="Hide">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="train-card-body" class="pt-2 max-h-[42vh] overflow-y-auto"></div>
+    </section>
+
+    <!-- TRIP GUIDE CARD (shown while a planned trip is active) -->
+    <section id="nav-card" class="hidden fixed left-3 right-3 sm:left-auto sm:right-4 sm:w-[300px] bottom-[136px] sm:bottom-6 z-30 bg-slate-900/95 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-900/30 border border-slate-700/80 p-3">
+        <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-700">
+            <div class="min-w-0">
+                <div class="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Trip guide</div>
+                <div id="nav-title" class="font-extrabold text-white text-xs truncate">—</div>
+            </div>
+            <button id="nav-end-btn" class="p-1.5 rounded-xl bg-slate-700 hover:bg-rose-600 text-slate-300 transition shrink-0" title="End trip">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="nav-instr" class="pt-2 text-[12px] font-bold text-white leading-snug"></div>
+        <div id="nav-dist" class="text-[11px] font-semibold text-emerald-300 pt-0.5"></div>
+        <div id="nav-countdown" class="mt-2 bg-white rounded-2xl p-2.5 hidden"></div>
+        <div class="flex gap-1.5 mt-2.5">
+            <button id="nav-prev-btn" class="flex-1 px-2 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-extrabold transition">‹ Prev</button>
+            <button id="nav-next-btn" class="flex-1 px-2 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-extrabold transition">Next ›</button>
+        </div>
+    </section>
+
     <!-- ======================================================================= -->
     <!-- TRIP PLANNER PANEL (FROM / TO → ROUTE + PDF)                            -->
     <!-- ======================================================================= -->
@@ -330,6 +368,26 @@
             <button id="plan-pdf-btn" class="hidden w-full px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold transition shadow-sm">
                 Download PDF Directions
             </button>
+            <button id="plan-share-btn" class="hidden w-full px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-sm">
+                Share Route Link
+            </button>
+
+            <!-- Start Trip options + button -->
+            <div id="trip-start-row" class="hidden rounded-2xl border border-slate-200 bg-slate-50 p-2.5 space-y-1.5">
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Start trip</div>
+                <label class="flex items-center gap-2 text-[11px] font-semibold text-slate-700 cursor-pointer">
+                    <input type="checkbox" id="trip-opt-gps" class="accent-emerald-600" checked> Track my location
+                </label>
+                <label class="flex items-center gap-2 text-[11px] font-semibold text-slate-700 cursor-pointer">
+                    <input type="checkbox" id="trip-opt-countdown" class="accent-emerald-600"> Station countdown
+                </label>
+                <label class="flex items-center gap-2 text-[11px] font-semibold text-slate-700 cursor-pointer">
+                    <input type="checkbox" id="trip-opt-center" class="accent-emerald-600"> Center map on me
+                </label>
+                <button id="trip-start-btn" class="w-full px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-sm">
+                    ▶ Start Trip
+                </button>
+            </div>
         </div>
     </section>
 
@@ -927,6 +985,7 @@
         let metroVisible = true;
         let busVisible = false;
         let activeLineFilter = 'ALL'; // 'ALL' or 'L1'..'L6'
+        let routeIsolateLines = null; // null or array of line ids used by the active route
         let activeBusFilter = 'ALL';  // 'ALL', 'MAIN', 'SECTOR', 'COMMUNITY', or 'R<no>'
         let destinationMarker = null;
         let currentDestination = null;
@@ -1210,7 +1269,20 @@
             map.setLayoutProperty('metro-lines-layer', 'visibility', metroVis);
             map.setLayoutProperty('metro-stations-layer', 'visibility', metroVis);
 
-            if (activeLineFilter === 'ALL') {
+            if (routeIsolateLines && routeIsolateLines.length) {
+                const ids = routeIsolateLines;
+                const lineFilter = ids.length === 1
+                    ? ['==', ['get', 'id'], ids[0]]
+                    : ['in', ['get', 'id'], ['literal', ids]];
+                const stFilter = ids.length === 1
+                    ? ['in', `"${ids[0]}"`, ['get', 'lines']]
+                    : ['any', ...ids.map(id => ['in', `"${id}"`, ['get', 'lines']])];
+                map.setFilter('metro-lines-casing', lineFilter);
+                map.setFilter('metro-lines-layer', lineFilter);
+                map.setFilter('metro-stations-layer', stFilter);
+                map.setPaintProperty('metro-lines-layer', 'line-width', 6.5);
+                map.setPaintProperty('metro-lines-casing', 'line-width', 9.5);
+            } else if (activeLineFilter === 'ALL') {
                 map.setFilter('metro-lines-casing', null);
                 map.setFilter('metro-lines-layer', null);
                 map.setFilter('metro-stations-layer', null);
@@ -1321,6 +1393,253 @@
             }
         });
 
+        // =========================================================================
+        // NEXT-TRAIN COUNTDOWN — live 1s ticker per line + trains moving on the map.
+        // Riyadh Metro publishes no public live feed, so a train simulation is run
+        // per line (official hours Sat–Thu 05:30–00:00, Fri 10:00–00:00 Riyadh time;
+        // ~40 km/h; 3–10 min headways). The popup countdown and the triangles on the
+        // lines come from the SAME simulation, so they always agree. Labelled "est.".
+        // =========================================================================
+        function ntRiyadhNow() {
+            const parts = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Riyadh', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+            }).formatToParts(new Date());
+            const get = t => (parts.find(p => p.type === t) || {}).value || '';
+            return { dow: get('weekday'), mins: (parseInt(get('hour'), 10) % 24) * 60 + parseInt(get('minute'), 10) };
+        }
+
+        function initMetroCountdown(box, stationName, lineCodes) {
+            const noop = () => {};
+            if (!box) return noop;
+            const codes = (lineCodes || []).filter(c => METRO_LINES[c]);
+            if (!codes.length) return noop;
+            box.innerHTML = '';
+
+            const { dow, mins } = ntRiyadhNow();
+            const isFri = dow === 'Fri';
+            const openMins = isFri ? 600 : 330; // Fri 10:00 / 05:30, closes midnight
+            if (mins < openMins) {
+                box.innerHTML = `<div class="text-[11px] leading-snug text-slate-500 pt-1">
+                    <span class="font-bold text-slate-600">Metro closed</span> — opens ${isFri ? 'Friday 10:00' : '05:30'} Riyadh time</div>`;
+                return noop;
+            }
+
+            const SPEED_KMH = 40;
+            const v = SPEED_KMH / 3600;          // km per second
+            const DWELL_S = 60;                  // dwell at each terminus
+            const SHOWN_TRAINS = 5;               // the next 5 trains to reach the station
+
+            // ---------- per-line train simulation ----------
+            const sims = codes.map(code => {
+                const line = METRO_LINES[code];
+                const pts = line.stations.map(s => [s.lng, s.lat]);
+                const cum = [0];
+                for (let i = 1; i < pts.length; i++) {
+                    const a = line.stations[i - 1], b = line.stations[i];
+                    cum.push(cum[i - 1] + haversineKm(a.lat, a.lng, b.lat, b.lng));
+                }
+                const L = cum[cum.length - 1] || 1;
+                const T = L / v;                              // one-way run time (s)
+                const P = 2 * T + 2 * DWELL_S;                // full there-and-back period (s)
+                const headwayS = (3 + Math.random() * 7) * 60; // 3–10 min
+                const M = Math.max(2, Math.min(24, Math.round(P / headwayS)));
+                const offsets = [];
+                for (let m = 0; m < M; m++) offsets.push(m * P / M);
+
+                // station position along the path + feasible directions
+                let idx = line.stations.findIndex(s => s.name === stationName);
+                if (idx < 0) { // fallback: nearest station by coordinates
+                    const target = ALL_STATIONS.find(s => s.name === stationName);
+                    let best = Infinity;
+                    line.stations.forEach((s, i) => {
+                        const d = target ? haversineKm(target.lat, target.lng, s.lat, s.lng) : 0;
+                        if (d < best) { best = d; idx = i; }
+                    });
+                    if (idx < 0) idx = 0;
+                }
+                const x = cum[idx];
+                const dirs = [];
+                if (idx > 0) dirs.push(1);                        // moving toward end of line
+                if (idx < line.stations.length - 1) dirs.push(-1);
+                if (!dirs.length) dirs.push(1);
+
+                return {
+                    code, line, pts, cum, L, T, P, v, dwell: DWELL_S,
+                    offsets, x, dirs,
+                    dir: dirs[Math.floor(Math.random() * dirs.length)],
+                    lastBrg: new Array(offsets.length).fill(0)
+                };
+            });
+
+            // distance along path -> lng/lat + segment bearing (deg, clockwise from north)
+            function ntPointAt(sim, s) {
+                s = Math.max(0, Math.min(sim.L, s));
+                let i = 0;
+                while (i < sim.cum.length - 2 && sim.cum[i + 1] < s) i++;
+                const c0 = sim.cum[i], c1 = sim.cum[i + 1];
+                const f = c1 > c0 ? (s - c0) / (c1 - c0) : 0;
+                const p0 = sim.pts[i], p1 = sim.pts[Math.min(i + 1, sim.pts.length - 1)];
+                const lng = p0[0] + (p1[0] - p0[0]) * f;
+                const lat = p0[1] + (p1[1] - p0[1]) * f;
+                const midLat = (p0[1] + p1[1]) / 2 * Math.PI / 180;
+                const east = (p1[0] - p0[0]) * Math.cos(midLat);
+                const north = p1[1] - p0[1];
+                const brg = (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+                return { lng, lat, brg };
+            }
+
+            // phase (s, can be any value) -> {s: distance along path, h: +1/-1/0 heading}
+            function ntPhaseState(sim, ph) {
+                let p = ph % sim.P;
+                if (p < 0) p += sim.P;
+                if (p < sim.T) return { s: sim.v * p, h: 1 };
+                if (p < sim.T + sim.dwell) return { s: sim.L, h: 0 };
+                if (p < 2 * sim.T + sim.dwell) return { s: sim.L - sim.v * (p - sim.T - sim.dwell), h: -1 };
+                return { s: 0, h: 0 };
+            }
+
+            // next time (epoch seconds) train offset `o` passes the station heading `dir`
+            function ntCross(sim, o, dir, nowS) {
+                const cross = dir === 1
+                    ? sim.x / sim.v
+                    : sim.T + sim.dwell + (sim.L - sim.x) / sim.v;
+                const k = Math.floor((nowS - o - cross) / sim.P) + 1;
+                return o + cross + k * sim.P;
+            }
+
+            // next time (epoch seconds) any train passes the station heading `dir`
+            function ntNextArrival(sim, dir, nowS) {
+                let best = Infinity;
+                sim.offsets.forEach(o => {
+                    const t = ntCross(sim, o, dir, nowS);
+                    if (t < best) best = t;
+                });
+                return best;
+            }
+
+            // ---------- popup rows ----------
+            const tracks = sims.map(sim => {
+                const line = sim.line;
+                const row = document.createElement('div');
+                row.style.cssText = `border-left:3px solid ${line.color};padding-left:7px;margin-top:7px;`;
+                const btns = sim.dirs.map(d => {
+                    const term = d === 1 ? line.stations[line.stations.length - 1].name : line.stations[0].name;
+                    const on = d === sim.dir;
+                    return `<button data-dir="${d}" class="nt-dirbtn flex-1 min-w-0 px-1 py-0.5 rounded text-[8px] font-extrabold leading-tight border truncate ${on ? 'text-white border-transparent' : 'bg-slate-100 text-slate-500 border-slate-200'}"
+                        style="${on ? `background:${line.color};color:${line.textColor}` : ''}">to ${term}</button>`;
+                }).join('');
+                row.innerHTML = `
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="nt-badge px-1.5 py-px rounded text-[9px] font-extrabold" style="background:${line.color};color:${line.textColor}">${line.shortName}</span>
+                        <span class="text-[8px] font-bold uppercase tracking-wide text-slate-400">est.</span>
+                    </div>
+                    <div class="flex items-end justify-between">
+                        <div class="nt-count text-lg font-extrabold text-slate-900 leading-none tabular-nums">--:--</div>
+                        <div class="nt-note text-[8px] font-bold text-slate-400"></div>
+                    </div>
+                    <div class="flex gap-1 mt-1">${btns}</div>`;
+                box.appendChild(row);
+
+                const btnEls = [...row.querySelectorAll('.nt-dirbtn')];
+                btnEls.forEach(b => b.addEventListener('click', () => {
+                    sim.dir = parseInt(b.dataset.dir, 10);
+                    btnEls.forEach(x => {
+                        const on = x === b;
+                        x.className = 'nt-dirbtn flex-1 min-w-0 px-1 py-0.5 rounded text-[8px] font-extrabold leading-tight border truncate ' +
+                            (on ? 'text-white border-transparent' : 'bg-slate-100 text-slate-500 border-slate-200');
+                        x.style.background = on ? line.color : '';
+                        x.style.color = on ? line.textColor : '';
+                    });
+                    tick();
+                    if (pushTrainsFn) pushTrainsFn();
+                }));
+
+                return { sim, countEl: row.querySelector('.nt-count'), noteEl: row.querySelector('.nt-note') };
+            });
+
+            function tick() {
+                const nowS = Date.now() / 1000;
+                tracks.forEach(t => {
+                    const remainS = ntNextArrival(t.sim, t.sim.dir, nowS) - nowS;
+                    if (remainS < 1.5) {
+                        t.countEl.textContent = 'Arriving';
+                    } else {
+                        const sec = Math.ceil(remainS);
+                        const m = Math.floor(sec / 60), r = sec % 60;
+                        t.countEl.textContent = m > 0 ? `${m}:${String(r).padStart(2, '0')}` : `${r}s`;
+                    }
+                    const term = t.sim.dir === 1
+                        ? t.sim.line.stations[t.sim.line.stations.length - 1].name
+                        : t.sim.line.stations[0].name;
+                    t.noteEl.textContent = `to ${term}`;
+                });
+            }
+
+            tick();
+            const iv = setInterval(tick, 1000);
+
+            // ---------- triangle trains moving on the map ----------
+            // DOM markers (bulletproof — no style/sprite API needed). Each of the
+            // SHOWN_TRAINS triangles is one real simulated train; its position is
+            // derived from elapsed travel time along the whole line path, and the
+            // whole overlay refreshes every 5 s.
+            const allMarkers = [];
+            let animIv = null, pushTrainsFn = null;
+            try {
+                function pushTrains() {
+                    const nowS = Date.now() / 1000;
+                    sims.forEach((sim, si) => {
+                        // next-5 trains arriving at the station in the CHOSEN
+                        // direction only — each drawn at its real position now
+                        const ranked = sim.offsets
+                            .map((o, m) => ({ o, m, t: ntCross(sim, o, sim.dir, nowS) }))
+                            .sort((a, b) => a.t - b.t)
+                            .slice(0, SHOWN_TRAINS);
+                        if (!sim.markers) sim.markers = [];
+                        ranked.forEach(({ o, m }, ri) => {
+                            const st = ntPhaseState(sim, nowS - o);
+                            const pt = ntPointAt(sim, st.s);
+                            let brg;
+                            if (st.h === 1) brg = pt.brg;
+                            else if (st.h === -1) brg = (pt.brg + 180) % 360;
+                            else brg = sim.lastBrg[m] || pt.brg;
+                            sim.lastBrg[m] = brg;
+
+                            let mk = sim.markers[ri];
+                            if (!mk) {
+                                const el = document.createElement('div');
+                                el.style.cssText = 'width:16px;height:16px;pointer-events:none;';
+                                el.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" style="display:block;filter:drop-shadow(0 0 2px #ffffff)"><polygon points="8,1 15,14 8,11 1,14" fill="${sim.line.color}" stroke="#ffffff" stroke-width="1.4"/></svg>`;
+                                mk = new maplibregl.Marker({ element: el, anchor: 'center' });
+                                sim.markers[ri] = mk;
+                                allMarkers.push(mk);
+                            }
+                            mk.getElement().firstElementChild.style.transform = `rotate(${Math.round(brg)}deg)`;
+                            mk.setLngLat([pt.lng, pt.lat]);
+                            if (!mk._onMap) { mk.addTo(map); mk._onMap = true; }
+                        });
+                        // hide any leftover markers if fewer trains ranked this round
+                        for (let ri = ranked.length; ri < sim.markers.length; ri++) {
+                            const mk = sim.markers[ri];
+                            if (mk && mk._onMap) { mk.remove(); mk._onMap = false; }
+                        }
+                    });
+                }
+
+                pushTrainsFn = pushTrains;
+                pushTrains();
+                animIv = setInterval(pushTrains, 5000);
+            } catch (err) {
+                console.warn('Metro train overlay failed:', err);
+            }
+
+            return () => {
+                clearInterval(iv);
+                if (animIv) clearInterval(animIv);
+                allMarkers.forEach(mk => { try { mk.remove(); } catch (e) { } });
+            };
+        }
+
         // Station & Line Click Popups
         let suppressMapClick = false; // set by layer clicks so the map tap doesn't drop a pin
 
@@ -1355,6 +1674,18 @@
                     </div>
                 `)
                 .addTo(map);
+
+            const trainCard = document.getElementById('train-card');
+            document.getElementById('train-card-title').textContent = props.name;
+            trainCard.classList.remove('hidden');
+            const ntStop = initMetroCountdown(document.getElementById('train-card-body'), props.name, lines);
+            activePopup.on('close', () => {
+                ntStop();
+                trainCard.classList.add('hidden');
+            });
+            document.getElementById('train-card-close').onclick = () => {
+                if (activePopup) activePopup.remove();
+            };
 
             const stFromMe = activePopup.getElement().querySelector('.popup-from-me');
             if (stFromMe) {
@@ -2087,6 +2418,7 @@
         document.querySelectorAll('.line-pill').forEach(pill => {
             pill.addEventListener('click', () => {
                 const chosen = pill.dataset.line;
+                routeIsolateLines = null; // manual pick overrides route isolation
                 // Clicking the already-isolated line toggles back to ALL
                 activeLineFilter = (activeLineFilter === chosen && chosen !== 'ALL') ? 'ALL' : chosen;
 
@@ -2197,6 +2529,10 @@
             lastPlan = null;
             lastPlanSet = null;
             drawPlan(null);
+            document.getElementById('plan-share-btn').classList.add('hidden');
+            document.getElementById('trip-start-row').classList.add('hidden');
+            isolateRouteLines(null);
+            endTrip();
         }
 
         let planPickTarget = null; // 'from' | 'to'
@@ -2207,6 +2543,7 @@
         const planPickMarkers = {};
         const HOME_LS_KEY = 'riyadhTransitHome';
         const GEMINI_LS_KEY = 'riyadhTransitGeminiKey';
+        const PLAN_LS_KEY = 'riyadhLastRoute';
         const GEMINI_MODEL = 'gemini-2.5-flash';
 
         function firebaseConfigReady() {
@@ -3071,6 +3408,27 @@ User request: ${q}`;
             b.walkKm = b.legs.filter(l => l.type === 'walk').reduce((a, l) => a + l.km, 0);
         }
 
+        // Show ONLY the metro line(s) the active route uses (+ matching bus layer)
+        function isolateRouteLines(plan) {
+            const legs = (plan && plan.best) ? plan.best.legs : [];
+            const ids = [...new Set(legs.filter(l => l.type === 'ride').map(l => l.line))];
+            routeIsolateLines = ids.length ? ids : null;
+            const hasBus = legs.some(l => l.type === 'bus');
+            if (plan) {
+                if (hasBus && !busVisible) setBusState(true);
+                if (!hasBus && busVisible) setBusState(false);
+            } else if (!busVisible) {
+                setBusState(true);
+            }
+            const cap = document.getElementById('active-line-caption');
+            if (cap) {
+                cap.textContent = ids.length === 1 ? `${METRO_LINES[ids[0]].name} — your route`
+                    : ids.length > 1 ? `Route lines: ${ids.map(i => METRO_LINES[i].shortName).join(' + ')}`
+                    : 'Showing all 6 Metro lines • Tap any color to isolate';
+            }
+            applyLayerFilters();
+        }
+
         function renderPlan(plan) {
             const res = document.getElementById('plan-results');
             const b = plan.best;
@@ -3138,6 +3496,16 @@ User request: ${q}`;
             document.getElementById('plan-mode-row').classList.remove('hidden');
             updateModeChips();
             document.getElementById('plan-pdf-btn').classList.remove('hidden');
+            document.getElementById('plan-share-btn').classList.remove('hidden');
+            document.getElementById('trip-start-row').classList.remove('hidden');
+            isolateRouteLines(plan);
+            try {
+                localStorage.setItem(PLAN_LS_KEY, JSON.stringify({
+                    f: { n: plan._from.name, la: +plan._from.lat.toFixed(5), ln: +plan._from.lng.toFixed(5) },
+                    t: { n: plan._to.name, la: +plan._to.lat.toFixed(5), ln: +plan._to.lng.toFixed(5) },
+                    m: planMode
+                }));
+            } catch (e) { }
             res.querySelectorAll('.plan-alt-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const opt = plan.options[Number(btn.dataset.planIdx)];
@@ -3376,6 +3744,9 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             document.getElementById('plan-results').classList.add('hidden');
             document.getElementById('plan-mode-row').classList.add('hidden');
             document.getElementById('plan-pdf-btn').classList.add('hidden');
+            document.getElementById('plan-share-btn').classList.add('hidden');
+            document.getElementById('trip-start-row').classList.add('hidden');
+            endTrip();
             const f = resolveEndpoint(document.getElementById('plan-from-input').value, planFromData);
             const t = resolveEndpoint(document.getElementById('plan-to-input').value, planToData);
             if (!f || !t) { showToast('Pick From and To from the suggestions'); return false; }
@@ -3387,6 +3758,252 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
         }
         document.getElementById('plan-go-btn').addEventListener('click', runPlanner);
         document.getElementById('plan-pdf-btn').addEventListener('click', downloadPlanPdf);
+
+        // ---- shareable route link: encodes From/To + route style into #r= hash ----
+        function b64urlEncode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let bin = '';
+            bytes.forEach(b => { bin += String.fromCharCode(b); });
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        function b64urlDecode(s) {
+            const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+            const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        }
+
+        function sharePlanLink() {
+            if (!lastPlanSet) return;
+            const enc = e => ({ n: String(e.name || 'Point'), la: +Number(e.lat).toFixed(5), ln: +Number(e.lng).toFixed(5) });
+            const payload = { f: enc(lastPlanSet.f), t: enc(lastPlanSet.t), m: planMode };
+            const url = location.href.split('#')[0] + '#r=' + b64urlEncode(JSON.stringify(payload));
+            const text = `${payload.f.n} → ${payload.t.n}`;
+            if (navigator.share) {
+                navigator.share({ title: 'Riyadh transit route', text, url }).catch(() => { });
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => showToast('Route link copied — send it to anyone'));
+            } else {
+                prompt('Copy this route link:', url);
+            }
+        }
+        document.getElementById('plan-share-btn').addEventListener('click', sharePlanLink);
+
+        // Open a shared #r= link: fill planner and run the route automatically.
+        function consumeSharedRoute() {
+            const m = location.hash.match(/#r=([A-Za-z0-9_-]+)/);
+            if (!m) return;
+            let d;
+            try { d = JSON.parse(b64urlDecode(m[1])); } catch (e) { return; }
+            const toEp = e => (e && isFinite(e.la) && isFinite(e.ln))
+                ? { name: String(e.n || 'Point').slice(0, 60), lat: e.la, lng: e.ln, kind: 'map' }
+                : null;
+            const f = toEp(d && d.f), t = toEp(d && d.t);
+            if (!f || !t) return;
+            try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { }
+            applyPlanEndpoints(f, t, d.m);
+            showToast('Shared route loaded');
+            return true;
+        }
+
+        // Fill planner endpoints and run the route (shared by links, restore, default)
+        function applyPlanEndpoints(f, t, mode) {
+            if (mode && ['fastest', 'least-walk', 'no-car', 'ai'].includes(mode)) {
+                planMode = (mode === 'ai' && !geminiKey()) ? 'fastest' : mode;
+            }
+            document.getElementById('plan-from-input').value = f.name;
+            document.getElementById('plan-to-input').value = t.name;
+            planFromData = f; planToData = t;
+            openPlanner();
+            placePlanMarker('from', f.lat, f.lng, '#059669', 'F');
+            placePlanMarker('to', t.lat, t.lng, '#0284c7', 'T');
+            runPlanner();
+        }
+
+        // Re-apply the last route this device planned (survives refresh)
+        function restoreLastRoute() {
+            try {
+                const d = JSON.parse(localStorage.getItem(PLAN_LS_KEY) || 'null');
+                if (!d) return false;
+                const toEp = e => (e && isFinite(e.la) && isFinite(e.ln))
+                    ? { name: String(e.n || 'Point').slice(0, 60), lat: e.la, lng: e.ln, kind: 'map' }
+                    : null;
+                const f = toEp(d.f), t = toEp(d.t);
+                if (!f || !t) return false;
+                applyPlanEndpoints(f, t, d.m);
+                return true;
+            } catch (e) { return false; }
+        }
+
+        // First-visit default: the whole Green Line for everyone to see
+        function loadDefaultRoute() {
+            const f = ALL_STATIONS.find(s => s.name === 'Ministry of Education');
+            const t = ALL_STATIONS.find(s => s.name === 'National Museum');
+            if (!f || !t) return false;
+            applyPlanEndpoints(
+                { name: f.name, lat: f.lat, lng: f.lng, kind: 'station' },
+                { name: t.name, lat: t.lat, lng: t.lng, kind: 'station' },
+                'fastest'
+            );
+            showToast('Demo route: Ministry of Education → National Museum (Green Line)');
+            return true;
+        }
+
+        const startShared = () => {
+            try {
+                if (!consumeSharedRoute()) {
+                    if (!restoreLastRoute()) loadDefaultRoute();
+                }
+            } catch (e) { console.warn('route restore failed', e); }
+        };
+        if (map.loaded()) startShared(); else map.once('load', startShared);
+
+        // =========================================================================
+        // TRIP GUIDE — start a planned route, track legs live via GPS
+        // =========================================================================
+        let navState = null;
+
+        function navLegTarget(leg, plan) {
+            return resolveLegPoint(leg.to, plan) || resolveLegPoint(leg.from, plan);
+        }
+
+        function navInstrText(l) {
+            if (l.type === 'walk') return `Walk to <b>${l.to}</b>`;
+            if (l.type === 'ride') {
+                const ln = METRO_LINES[l.line];
+                return `Take <b>${ln ? ln.shortName : l.line}</b> — stay on until <b>${l.to}</b>`;
+            }
+            if (l.type === 'car') return `Drive to <b>${l.to}</b>`;
+            if (l.type === 'bus') return `Take <b>BUS ${l.route}</b> until <b>${l.to}</b>`;
+            return String(l.type);
+        }
+
+        function navRender() {
+            if (!navState) return;
+            const plan = navState.plan, legs = plan.best.legs;
+            document.getElementById('nav-title').textContent = `${plan._from.name} → ${plan._to.name}`;
+            const instrEl = document.getElementById('nav-instr');
+            const distEl = document.getElementById('nav-dist');
+            if (navState.legIdx >= legs.length) {
+                navState.done = true;
+                instrEl.innerHTML = 'Trip complete — you made it!';
+                distEl.textContent = '';
+                document.getElementById('nav-next-btn').textContent = 'Restart';
+                return;
+            }
+            document.getElementById('nav-next-btn').textContent = 'Next ›';
+            const leg = legs[navState.legIdx];
+            const target = navLegTarget(leg, plan);
+            instrEl.innerHTML = `<span class="text-emerald-400">${navState.legIdx + 1}/${legs.length}</span> · ${navInstrText(leg)}`;
+            if (navState.pos && target) {
+                const d = haversineKm(navState.pos.lat, navState.pos.lng, target.lat, target.lng);
+                distEl.textContent = '● ' + fmtDist(d) + ' to ' + (leg.to || 'next point');
+            } else {
+                distEl.textContent = '';
+            }
+        }
+
+        function navAdvance() {
+            if (!navState) return;
+            navState.legIdx++;
+            if (navState.legIdx >= navState.plan.best.legs.length) {
+                navState.done = true;
+                showToast('Trip complete!');
+            }
+            navRender();
+        }
+
+        function navTick(pos) {
+            if (!navState) return;
+            navState.pos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            if (navState.meMarker) navState.meMarker.setLngLat([navState.pos.lng, navState.pos.lat]);
+            if (navState.center) map.easeTo({ center: [navState.pos.lng, navState.pos.lat], duration: 300 });
+            if (navState.done) return;
+            const legs = navState.plan.best.legs;
+            const leg = legs[navState.legIdx];
+            if (!leg) return;
+            const target = navLegTarget(leg, navState.plan);
+            if (target && leg.type !== 'ride') {
+                const d = haversineKm(navState.pos.lat, navState.pos.lng, target.lat, target.lng);
+                const thr = leg.type === 'walk' ? 0.12 : 0.15;
+                if (d < thr) { navAdvance(); return; }
+            }
+            navRender();
+        }
+
+        function startTrip() {
+            if (!lastPlan) return;
+            endTrip();
+            const plan = lastPlan;
+            navState = {
+                plan, legIdx: 0, pos: null, watchId: null,
+                center: document.getElementById('trip-opt-center').checked,
+                countdownStop: null, meMarker: null, done: false
+            };
+            document.getElementById('nav-card').classList.remove('hidden');
+
+            // blue "you are here" marker on the map
+            const meEl = document.createElement('div');
+            meEl.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#0284c7;border:2.5px solid #fff;box-shadow:0 0 8px #0284c7;pointer-events:none;';
+            navState.meMarker = new maplibregl.Marker({ element: meEl, anchor: 'center' })
+                .setLngLat([plan._from.lng, plan._from.lat])
+                .addTo(map);
+
+            // optional live countdown at the first boarding station
+            if (document.getElementById('trip-opt-countdown').checked) {
+                const rideLeg = plan.best.legs.find(l => l.type === 'ride');
+                if (rideLeg) {
+                    const st = ALL_STATIONS.find(s => s.name === rideLeg.from);
+                    if (st && st.lines && st.lines.length) {
+                        const box = document.getElementById('nav-countdown');
+                        box.innerHTML = '';
+                        box.classList.remove('hidden');
+                        navState.countdownStop = initMetroCountdown(box, rideLeg.from, st.lines);
+                    }
+                }
+            }
+
+            navRender();
+            if (document.getElementById('trip-opt-gps').checked) {
+                if (navigator.geolocation) {
+                    navState.watchId = navigator.geolocation.watchPosition(
+                        navTick,
+                        () => showToast('GPS unavailable — use the Next button manually'),
+                        { enableHighAccuracy: true, maximumAge: 4000 }
+                    );
+                } else {
+                    showToast('GPS not supported on this browser');
+                }
+            }
+            document.getElementById('trip-start-row').classList.add('hidden');
+        }
+
+        function endTrip() {
+            if (!navState) {
+                document.getElementById('nav-card').classList.add('hidden');
+                return;
+            }
+            if (navState.watchId != null && navigator.geolocation) {
+                navigator.geolocation.clearWatch(navState.watchId);
+            }
+            if (navState.countdownStop) navState.countdownStop();
+            if (navState.meMarker) navState.meMarker.remove();
+            navState = null;
+            document.getElementById('nav-card').classList.add('hidden');
+            const cb = document.getElementById('nav-countdown');
+            if (cb) { cb.innerHTML = ''; cb.classList.add('hidden'); }
+        }
+
+        document.getElementById('trip-start-btn').addEventListener('click', startTrip);
+        document.getElementById('nav-end-btn').addEventListener('click', endTrip);
+        document.getElementById('nav-next-btn').addEventListener('click', () => {
+            if (navState && navState.legIdx >= navState.plan.best.legs.length) { navState.legIdx = 0; navRender(); }
+            else navAdvance();
+        });
+        document.getElementById('nav-prev-btn').addEventListener('click', () => {
+            if (!navState) return;
+            navState.legIdx = Math.max(0, navState.legIdx - 1);
+            navRender();
+        });
 
         // ---- settings gear (Gemini key) ----
         document.getElementById('btn-settings').addEventListener('click', () => {
