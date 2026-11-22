@@ -958,13 +958,16 @@
         }
 
         function setupTransitMapLayers() {
-            // 1. Bus Routes Source & Layer (official road-following geometry)
+            // 1. Bus Routes Source & Layers (official road-following geometry)
+            // line-dasharray doesn't support data expressions, so solid routes and
+            // dashed community routes live on two layers sharing the same source.
             if (!map.getSource('bus-routes')) {
                 map.addSource('bus-routes', { type: 'geojson', data: buildBusCorridorsGeoJSON() });
                 map.addLayer({
                     id: 'bus-lines-layer',
                     type: 'line',
                     source: 'bus-routes',
+                    filter: ['!=', ['get', 'category'], 'COMMUNITY'],
                     layout: {
                         'line-join': 'round',
                         'line-cap': 'round',
@@ -973,10 +976,24 @@
                     paint: {
                         'line-color': ['get', 'color'],
                         'line-width': ['case',
-                            ['==', ['get', 'kind'], 'brt'], 4.5,
-                            ['==', ['get', 'category'], 'COMMUNITY'], 2.2, 3.2],
-                        'line-dasharray': ['case',
-                            ['==', ['get', 'category'], 'COMMUNITY'], [2, 1.4], [1, 0]],
+                            ['==', ['get', 'kind'], 'brt'], 4.5, 3.2],
+                        'line-opacity': 0.85
+                    }
+                });
+                map.addLayer({
+                    id: 'bus-lines-dash-layer',
+                    type: 'line',
+                    source: 'bus-routes',
+                    filter: ['==', ['get', 'category'], 'COMMUNITY'],
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round',
+                        'visibility': busVisible ? 'visible' : 'none'
+                    },
+                    paint: {
+                        'line-color': ['get', 'color'],
+                        'line-width': 2.2,
+                        'line-dasharray': [2, 1.4],
                         'line-opacity': 0.85
                     }
                 });
@@ -1180,7 +1197,9 @@
 
             if (!map.getLayer('bus-stops-layer')) return;
             const busVis = busVisible ? 'visible' : 'none';
+            const dashLayer = map.getLayer('bus-lines-dash-layer');
             map.setLayoutProperty('bus-lines-layer', 'visibility', busVis);
+            if (dashLayer) map.setLayoutProperty('bus-lines-dash-layer', 'visibility', busVis);
             map.setLayoutProperty('bus-stops-layer', 'visibility', busVis);
             let busFilter = null, stopFilter = null;
             if (activeBusFilter.startsWith('R')) {
@@ -1191,17 +1210,25 @@
                 busFilter = ['==', ['get', 'category'], activeBusFilter];
                 stopFilter = ['==', ['get', 'cat'], activeBusFilter];
             }
-            map.setFilter('bus-lines-layer', busFilter);
+            // each line layer keeps its own category split ANDed with the active filter
+            const splitFor = id => id === 'bus-lines-dash-layer'
+                ? ['==', ['get', 'category'], 'COMMUNITY']
+                : ['!=', ['get', 'category'], 'COMMUNITY'];
+            const combo = (split, f) => f ? ['all', split, f] : split;
+            map.setFilter('bus-lines-layer', combo(splitFor('bus-lines-layer'), busFilter));
+            if (dashLayer) map.setFilter('bus-lines-dash-layer', combo(splitFor('bus-lines-dash-layer'), busFilter));
             map.setFilter('bus-stops-layer', stopFilter);
             // single isolated route → thick red highlight so it pops
             const soloRoute = activeBusFilter.startsWith('R');
-            map.setPaintProperty('bus-lines-layer', 'line-color', soloRoute ? '#ef4444' : ['get', 'color']);
-            map.setPaintProperty('bus-lines-layer', 'line-width', soloRoute ? 6 : ['case',
-                ['==', ['get', 'kind'], 'brt'], 4.5,
-                ['==', ['get', 'category'], 'COMMUNITY'], 2.2, 3.2]);
-            map.setPaintProperty('bus-lines-layer', 'line-opacity', soloRoute ? 1 : 0.85);
-            map.setPaintProperty('bus-lines-layer', 'line-dasharray', soloRoute ? [1, 0] : ['case',
-                ['==', ['get', 'category'], 'COMMUNITY'], [2, 1.4], [1, 0]]);
+            ['bus-lines-layer', 'bus-lines-dash-layer'].forEach(id => {
+                if (!map.getLayer(id)) return;
+                const isDash = id === 'bus-lines-dash-layer';
+                map.setPaintProperty(id, 'line-color', soloRoute ? '#ef4444' : ['get', 'color']);
+                map.setPaintProperty(id, 'line-width', soloRoute ? 6 : (isDash ? 2.2 : ['case',
+                    ['==', ['get', 'kind'], 'brt'], 4.5, 3.2]));
+                map.setPaintProperty(id, 'line-opacity', soloRoute ? 1 : 0.85);
+                map.setPaintProperty(id, 'line-dasharray', isDash && !soloRoute ? [2, 1.4] : [1, 0]);
+            });
             // enlarge stops when a single route is isolated so its path is obvious
             map.setPaintProperty('bus-stops-layer', 'circle-radius', soloRoute
                 ? 6
@@ -1307,7 +1334,7 @@
             }
         });
 
-        map.on('click', 'bus-lines-layer', (e) => {
+        function onBusLineClick(e) {
             if (planPickTarget || homePickMode) {
                 handlePlannerMapPick(e.lngLat.lat, e.lngLat.lng);
                 suppressMapClick = true;
@@ -1349,7 +1376,9 @@
                     showToast(`Showing only ${props.route} + its stops — pick "Show all routes" to reset`);
                 });
             }
-        });
+        }
+        map.on('click', 'bus-lines-layer', onBusLineClick);
+        map.on('click', 'bus-lines-dash-layer', onBusLineClick);
 
         // Bus stop click popup
         map.on('click', 'bus-stops-layer', (e) => {
@@ -1425,6 +1454,8 @@
         map.on('mouseleave', 'metro-stations-layer', () => map.getCanvas().style.cursor = '');
         map.on('mouseenter', 'bus-lines-layer', () => map.getCanvas().style.cursor = 'pointer');
         map.on('mouseleave', 'bus-lines-layer', () => map.getCanvas().style.cursor = '');
+        map.on('mouseenter', 'bus-lines-dash-layer', () => map.getCanvas().style.cursor = 'pointer');
+        map.on('mouseleave', 'bus-lines-dash-layer', () => map.getCanvas().style.cursor = '');
         map.on('mouseenter', 'bus-stops-layer', () => map.getCanvas().style.cursor = 'pointer');
         map.on('mouseleave', 'bus-stops-layer', () => map.getCanvas().style.cursor = '');
 
