@@ -317,6 +317,14 @@
                 <div class="text-[9px] leading-snug text-violet-700/70">Describe your trip in plain words — needs a free Gemini key from Settings ⚙</div>
             </div>
 
+            <!-- Route style picker: fastest / least walking / no car / AI -->
+            <div id="plan-mode-row" class="hidden grid grid-cols-4 gap-1 p-1 rounded-2xl bg-slate-100">
+                <button type="button" data-plan-mode="fastest" class="plan-mode-chip px-1 py-1.5 rounded-xl text-[10px] font-extrabold transition">Fastest</button>
+                <button type="button" data-plan-mode="least-walk" class="plan-mode-chip px-1 py-1.5 rounded-xl text-[10px] font-extrabold transition">Least walk</button>
+                <button type="button" data-plan-mode="no-car" class="plan-mode-chip px-1 py-1.5 rounded-xl text-[10px] font-extrabold transition">No car</button>
+                <button type="button" data-plan-mode="ai" class="plan-mode-chip px-1 py-1.5 rounded-xl text-[10px] font-extrabold transition">AI</button>
+            </div>
+
             <div id="plan-results" class="hidden space-y-2"></div>
 
             <button id="plan-pdf-btn" class="hidden w-full px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold transition shadow-sm">
@@ -2168,6 +2176,8 @@
         // =========================================================================
         let planFromData = null, planToData = null;
         let lastPlan = null;
+        let lastPlanSet = null;   // { f, t, options } — all computed route options
+        let planMode = 'fastest'; // fastest | least-walk | no-car | ai
 
         function openPlanner() {
             // Default From = saved Home whenever the planner opens empty
@@ -2184,6 +2194,8 @@
             homePickMode = false;
             document.body.classList.remove('map-picking');
             document.getElementById('planner-panel').classList.add('hidden');
+            lastPlan = null;
+            lastPlanSet = null;
             drawPlan(null);
         }
 
@@ -2313,14 +2325,19 @@
             const key = geminiKey();
             if (!key) return { error: 'no-key' };
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
-                })
-            });
+            let res;
+            try {
+                res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+                    })
+                });
+            } catch (e) {
+                return { error: 'network', detail: 'offline or unreachable' };
+            }
             if (!res.ok) {
                 const detail = (await res.text().catch(() => '')).slice(0, 160);
                 return { error: 'api', status: res.status, detail };
@@ -3000,20 +3017,112 @@ User request: ${q}`;
                 html += `<li class="flex gap-1.5 text-[11px] text-slate-700"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span>${legText(l)}</span></li>`;
             });
             html += `</ol></div>`;
-            const alts = plan.options.slice(1);
+            const alts = plan.options.filter(o => o !== b);
             if (alts.length) {
-                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Other options — fastest first, then least walking</div>`;
+                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Tap an option to preview it on the map</div>`;
                 let leastWalk = null;
-                alts.forEach(o => { if (!leastWalk || o.walkKm < leastWalk.walkKm) leastWalk = o; });
+                plan.options.forEach(o => { if (!leastWalk || o.walkKm < leastWalk.walkKm) leastWalk = o; });
                 alts.forEach(o => {
+                    const idx = plan.options.indexOf(o);
                     const lbl = { metro: 'Metro', mixed: 'Metro + Bus', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
                     const easyTag = (leastWalk === o && o.walkKm + 0.2 < b.walkKm) ? ' • least walking' : '';
-                    html += `<div class="flex justify-between text-[11px] text-slate-600 px-1"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}${easyTag}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></div>`;
+                    const carTag = planHasCar(o) ? ' • needs car' : '';
+                    html += `<button type="button" data-plan-idx="${idx}" class="plan-alt-btn w-full flex justify-between items-center text-[11px] text-slate-600 hover:bg-sky-50 hover:text-sky-800 rounded-lg px-2 py-1.5 transition text-left"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}${carTag}${easyTag}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></button>`;
                 });
             }
             res.innerHTML = html;
             res.classList.remove('hidden');
+            document.getElementById('plan-mode-row').classList.remove('hidden');
+            updateModeChips();
             document.getElementById('plan-pdf-btn').classList.remove('hidden');
+            res.querySelectorAll('.plan-alt-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const opt = plan.options[Number(btn.dataset.planIdx)];
+                    if (opt) selectPlanOption(opt);
+                });
+            });
+        }
+
+        function planHasCar(p) { return p.legs.some(l => l.type === 'car'); }
+
+        function selectPlanOption(opt) {
+            if (!lastPlan || !lastPlan.options.includes(opt)) return;
+            lastPlan.best = opt;
+            drawPlan(lastPlan);
+            renderPlan(lastPlan);
+        }
+
+        function pickPlanOption(options, mode) {
+            if (mode === 'least-walk') {
+                return options.slice().sort((a, b) => (a.walkKm - b.walkKm) || (a.timeSec - b.timeSec))[0];
+            }
+            if (mode === 'no-car') {
+                const nc = options.filter(o => !planHasCar(o));
+                if (nc.length) return nc.slice().sort((a, b) => (a.walkKm - b.walkKm) || (a.timeSec - b.timeSec))[0];
+            }
+            return options[0]; // fastest
+        }
+
+        function buildPlanPickPrompt(f, t, options) {
+            const nm = o => ({ metro: 'Metro', mixed: 'Metro + Bus', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walk' })[o.mode] || o.mode;
+            const list = options.map((o, i) =>
+                `${i}: ${nm(o)} | ${Math.round(o.timeSec / 60)} min | ${o.walkKm.toFixed(1)} km walking | ${o.km.toFixed(1)} km total | legs: ${o.legs.map(l => l.type).join('>')}`
+            ).join('\n');
+            const pref = document.getElementById('plan-ai-input').value.trim();
+            return `You pick the best transit route in Riyadh for this trip.
+From: ${f.name}
+To: ${t.name}
+Options:
+${list}
+${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option index>, "tip": "<one short sentence>"}`;
+        }
+
+        async function presentPlan() {
+            if (!lastPlanSet) return;
+            const { f, t, options } = lastPlanSet;
+            let chosen = pickPlanOption(options, planMode);
+            if (planMode === 'ai') {
+                const r = await askGemini(buildPlanPickPrompt(f, t, options));
+                if (r.json && Number.isInteger(r.json.pick) && options[r.json.pick]) {
+                    chosen = options[r.json.pick];
+                    if (r.json.tip) showToast(String(r.json.tip).slice(0, 140));
+                } else {
+                    if (r.error === 'no-key') {
+                        showToast('AI mode needs a Gemini key — showing fastest');
+                        document.getElementById('settings-panel').classList.remove('hidden');
+                    } else if (r.error) {
+                        showToast('AI pick failed — showing fastest');
+                    }
+                    chosen = options[0];
+                }
+            }
+            lastPlan = { best: chosen, options, _from: f, _to: t };
+            drawPlan(lastPlan);
+            renderPlan(lastPlan);
+            zoomPlanTo(lastPlan);
+        }
+
+        function zoomPlanTo(plan) {
+            const all = [];
+            plan.best.legs.forEach(l => {
+                if (l.type === 'walk') { const a = resolveLegPoint(l.from, plan), b = resolveLegPoint(l.to, plan); if (a) all.push([a.lng, a.lat]); if (b) all.push([b.lng, b.lat]); }
+                else if (l.type === 'ride') { const lo = METRO_LINES[l.line]; if (lo) lo.stations.forEach(s => all.push([s.lng, s.lat])); }
+                else if (l.type === 'car') { if (l.fromPt) all.push([l.fromPt.lng, l.fromPt.lat]); if (l.toPt) all.push([l.toPt.lng, l.toPt.lat]); }
+                else if (l.type === 'bus' && l.geo) l.geo.forEach(c => all.push(c));
+            });
+            if (all.length) {
+                const bds = new maplibregl.LngLatBounds();
+                all.forEach(c => bds.extend(c));
+                map.fitBounds(bds, { padding: 70, maxZoom: 13, duration: 800 });
+            }
+        }
+
+        function updateModeChips() {
+            document.querySelectorAll('.plan-mode-chip').forEach(c => {
+                const on = c.dataset.planMode === planMode;
+                c.className = 'plan-mode-chip px-1 py-1.5 rounded-xl text-[10px] font-extrabold transition ' +
+                    (on ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700');
+            });
         }
 
         // ---- PDF export (hand-built, no dependencies — works offline)
@@ -3083,11 +3192,11 @@ User request: ${q}`;
                 wrapPdf(`${i + 1}. ${legText(l)}`, 95).forEach(w => body.push('   ' + w));
             });
             body.push('');
-            const alts = plan.options.slice(1);
+            const alts = plan.options.filter(o => o !== b);
             if (alts.length) {
                 body.push('OTHER OPTIONS');
                 alts.forEach(o => {
-                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', bus: 'Bus', walk: 'Walking only' }[o.mode] || o.mode;
+                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walking only' }[o.mode] || o.mode;
                     body.push(`- ${lbl}: ${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km`);
                 });
                 body.push('');
@@ -3149,30 +3258,17 @@ User request: ${q}`;
         });
         function runPlanner() {
             lastPlan = null;
+            lastPlanSet = null;
             document.getElementById('plan-results').classList.add('hidden');
+            document.getElementById('plan-mode-row').classList.add('hidden');
             document.getElementById('plan-pdf-btn').classList.add('hidden');
             const f = resolveEndpoint(document.getElementById('plan-from-input').value, planFromData);
             const t = resolveEndpoint(document.getElementById('plan-to-input').value, planToData);
             if (!f || !t) { showToast('Pick From and To from the suggestions'); return false; }
             if (Math.abs(f.lat - t.lat) < 0.0005 && Math.abs(f.lng - t.lng) < 0.0005) { showToast('From and To are the same place'); return false; }
-            const plan = computeBestPlan(f, t);
-            plan._from = f; plan._to = t;
-            lastPlan = plan;
-            drawPlan(plan);
-            renderPlan(plan);
-            // zoom to route
-            const all = [];
-            plan.best.legs.forEach(l => {
-                if (l.type === 'walk') { const a = resolveLegPoint(l.from, plan), b = resolveLegPoint(l.to, plan); if (a) all.push([a.lng, a.lat]); if (b) all.push([b.lng, b.lat]); }
-                else if (l.type === 'ride') { const lo = METRO_LINES[l.line]; if (lo) lo.stations.forEach(s => all.push([s.lng, s.lat])); }
-                else if (l.type === 'car') { if (l.fromPt) all.push([l.fromPt.lng, l.fromPt.lat]); if (l.toPt) all.push([l.toPt.lng, l.toPt.lat]); }
-                else if (l.type === 'bus' && l.geo) l.geo.forEach(c => all.push(c));
-            });
-            if (all.length) {
-                const bds = new maplibregl.LngLatBounds();
-                all.forEach(c => bds.extend(c));
-                map.fitBounds(bds, { padding: 70, maxZoom: 13, duration: 800 });
-            }
+            const set = computeBestPlan(f, t);
+            lastPlanSet = { f, t, options: set.options };
+            presentPlan();
             return true;
         }
         document.getElementById('plan-go-btn').addEventListener('click', runPlanner);
@@ -3246,6 +3342,21 @@ User request: ${q}`;
         }
         document.getElementById('plan-ai-btn').addEventListener('click', runAiPlan);
         document.getElementById('plan-ai-input').addEventListener('keydown', e => { if (e.key === 'Enter') runAiPlan(); });
+
+        // ---- route style chips: fastest / least walk / no car / AI ----
+        document.querySelectorAll('.plan-mode-chip').forEach(c => {
+            c.addEventListener('click', () => {
+                planMode = c.dataset.planMode;
+                if (planMode === 'ai' && !geminiKey()) {
+                    document.getElementById('settings-panel').classList.remove('hidden');
+                    showToast('Add your Gemini API key in Settings for AI mode');
+                    updateModeChips();
+                    return;
+                }
+                updateModeChips();
+                presentPlan();
+            });
+        });
 
         initHome();
 
