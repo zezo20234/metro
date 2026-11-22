@@ -250,15 +250,15 @@
                 <div class="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Trip guide</div>
                 <div id="nav-title" class="font-extrabold text-white text-xs truncate">—</div>
             </div>
-            <button id="nav-end-btn" class="p-1.5 rounded-xl bg-slate-700 hover:bg-rose-600 text-slate-300 transition shrink-0" title="End trip">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+            <button id="nav-end-btn" class="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-extrabold transition shrink-0" title="Finish trip — only the person who started can end it">
+                Finish
             </button>
         </div>
-        <div id="nav-instr" class="pt-2 text-[12px] font-bold text-white leading-snug"></div>
+        <div id="nav-eta" class="pt-1.5 text-[11px] font-extrabold text-amber-300"></div>
+        <div id="nav-instr" class="pt-1 text-[12px] font-bold text-white leading-snug"></div>
         <div id="nav-dist" class="text-[11px] font-semibold text-emerald-300 pt-0.5"></div>
         <div id="nav-countdown" class="mt-2 bg-white rounded-2xl p-2.5 hidden"></div>
+        <button id="nav-gps-btn" class="hidden mt-2 w-full px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-extrabold transition">📍 Enable my location</button>
         <div class="flex gap-1.5 mt-2.5">
             <button id="nav-prev-btn" class="flex-1 px-2 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-extrabold transition">‹ Prev</button>
             <button id="nav-next-btn" class="flex-1 px-2 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-extrabold transition">Next ›</button>
@@ -2520,19 +2520,15 @@
                 placePlanMarker('from', homeLocation.lat, homeLocation.lng, '#f59e0b', 'H');
             }
             document.getElementById('planner-panel').classList.remove('hidden');
+            if (lastPlan) renderPlan(lastPlan); // route survives closing — show it again
         }
         function closePlanner() {
+            // Only hides the panel — the route, map line and saved route stay intact.
+            // It can never be "ended" by accident; only a new plan replaces it.
             planPickTarget = null;
             homePickMode = false;
             document.body.classList.remove('map-picking');
             document.getElementById('planner-panel').classList.add('hidden');
-            lastPlan = null;
-            lastPlanSet = null;
-            drawPlan(null);
-            document.getElementById('plan-share-btn').classList.add('hidden');
-            document.getElementById('trip-start-row').classList.add('hidden');
-            isolateRouteLines(null);
-            endTrip();
         }
 
         let planPickTarget = null; // 'from' | 'to'
@@ -3887,10 +3883,22 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
                 navState.done = true;
                 instrEl.innerHTML = 'Trip complete — you made it!';
                 distEl.textContent = '';
+                document.getElementById('nav-eta').textContent = '';
                 document.getElementById('nav-next-btn').textContent = 'Restart';
                 return;
             }
             document.getElementById('nav-next-btn').textContent = 'Next ›';
+            // time left = remaining leg times + remaining line-change penalties
+            let remTransfers = 0, prevL = null;
+            const remLegs = legs.slice(navState.legIdx);
+            remLegs.forEach(l => {
+                if (l.type === 'ride') {
+                    if (prevL && prevL !== l.line) remTransfers++;
+                    prevL = l.line;
+                }
+            });
+            const remSec = remLegs.reduce((a, l) => a + legTimeSec(l), 0) + remTransfers * 240;
+            document.getElementById('nav-eta').textContent = `⏱ ~${fmtTime(remSec)} left`;
             const leg = legs[navState.legIdx];
             const target = navLegTarget(leg, plan);
             instrEl.innerHTML = `<span class="text-emerald-400">${navState.legIdx + 1}/${legs.length}</span> · ${navInstrText(leg)}`;
@@ -3966,8 +3974,7 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             if (document.getElementById('trip-opt-gps').checked) {
                 if (navigator.geolocation) {
                     navState.watchId = navigator.geolocation.watchPosition(
-                        navTick,
-                        () => showToast('GPS unavailable — use the Next button manually'),
+                        navTick, navGpsErr,
                         { enableHighAccuracy: true, maximumAge: 4000 }
                     );
                 } else {
@@ -3975,6 +3982,27 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
                 }
             }
             document.getElementById('trip-start-row').classList.add('hidden');
+        }
+
+        function navGpsErr() {
+            showToast('Location unavailable — tap "Enable my location"');
+            const b = document.getElementById('nav-gps-btn');
+            if (b && navState) b.classList.remove('hidden');
+        }
+
+        // iOS/PWA requires a user tap before geolocation is allowed — this is it
+        function navRequestGps() {
+            if (!navState || !navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(pos => {
+                navTick(pos);
+                if (navState && navState.watchId == null) {
+                    navState.watchId = navigator.geolocation.watchPosition(
+                        navTick, navGpsErr,
+                        { enableHighAccuracy: true, maximumAge: 4000 }
+                    );
+                }
+                document.getElementById('nav-gps-btn').classList.add('hidden');
+            }, navGpsErr, { enableHighAccuracy: true });
         }
 
         function endTrip() {
@@ -3991,10 +4019,12 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             document.getElementById('nav-card').classList.add('hidden');
             const cb = document.getElementById('nav-countdown');
             if (cb) { cb.innerHTML = ''; cb.classList.add('hidden'); }
+            document.getElementById('nav-gps-btn').classList.add('hidden');
         }
 
         document.getElementById('trip-start-btn').addEventListener('click', startTrip);
         document.getElementById('nav-end-btn').addEventListener('click', endTrip);
+        document.getElementById('nav-gps-btn').addEventListener('click', navRequestGps);
         document.getElementById('nav-next-btn').addEventListener('click', () => {
             if (navState && navState.legIdx >= navState.plan.best.legs.length) { navState.legIdx = 0; navRender(); }
             else navAdvance();
