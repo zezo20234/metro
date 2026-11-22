@@ -2540,6 +2540,7 @@
         const HOME_LS_KEY = 'riyadhTransitHome';
         const GEMINI_LS_KEY = 'riyadhTransitGeminiKey';
         const PLAN_LS_KEY = 'riyadhLastRoute';
+        const ROUTE_OFF_KEY = 'riyadhRouteOff'; // set by Finish — keeps map clean until a new plan
         const GEMINI_MODEL = 'gemini-2.5-flash';
 
         function firebaseConfigReady() {
@@ -3496,6 +3497,7 @@ User request: ${q}`;
             document.getElementById('trip-start-row').classList.remove('hidden');
             isolateRouteLines(plan);
             try {
+                localStorage.removeItem(ROUTE_OFF_KEY); // a fresh plan re-enables routes
                 localStorage.setItem(PLAN_LS_KEY, JSON.stringify({
                     f: { n: plan._from.name, la: +plan._from.lat.toFixed(5), ln: +plan._from.lng.toFixed(5) },
                     t: { n: plan._to.name, la: +plan._to.lat.toFixed(5), ln: +plan._to.lng.toFixed(5) },
@@ -3802,7 +3804,7 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
         }
 
         // Fill planner endpoints and run the route (shared by links, restore, default)
-        function applyPlanEndpoints(f, t, mode) {
+        function applyPlanEndpoints(f, t, mode, showMarkers = true) {
             if (mode && ['fastest', 'least-walk', 'no-car', 'ai'].includes(mode)) {
                 planMode = (mode === 'ai' && !geminiKey()) ? 'fastest' : mode;
             }
@@ -3810,8 +3812,10 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             document.getElementById('plan-to-input').value = t.name;
             planFromData = f; planToData = t;
             openPlanner();
-            placePlanMarker('from', f.lat, f.lng, '#059669', 'F');
-            placePlanMarker('to', t.lat, t.lng, '#0284c7', 'T');
+            if (showMarkers) {
+                placePlanMarker('from', f.lat, f.lng, '#059669', 'F');
+                placePlanMarker('to', t.lat, t.lng, '#0284c7', 'T');
+            }
             runPlanner();
         }
 
@@ -3825,7 +3829,7 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
                     : null;
                 const f = toEp(d.f), t = toEp(d.t);
                 if (!f || !t) return false;
-                applyPlanEndpoints(f, t, d.m);
+                applyPlanEndpoints(f, t, d.m, false);
                 return true;
             } catch (e) { return false; }
         }
@@ -3838,16 +3842,46 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
             applyPlanEndpoints(
                 { name: f.name, lat: f.lat, lng: f.lng, kind: 'station' },
                 { name: t.name, lat: t.lat, lng: t.lng, kind: 'station' },
-                'fastest'
+                'fastest', false
             );
             showToast('Demo route: Ministry of Education → National Museum (Green Line)');
             return true;
         }
 
+        // Finish = owner-only action: wipes the route completely so it
+        // doesn't come back on refresh. Others never see this button.
+        function finishTrip() {
+            endTrip();
+            lastPlan = null;
+            lastPlanSet = null;
+            routeIsolateLines = null;
+            if (!busVisible) setBusState(true);
+            applyLayerFilters();
+            const cap = document.getElementById('active-line-caption');
+            if (cap) cap.textContent = 'Showing all 6 Metro lines • Tap any color to isolate';
+            drawPlan(null);
+            ['from', 'to', 'home-use'].forEach(k => {
+                if (planPickMarkers[k]) { planPickMarkers[k].remove(); delete planPickMarkers[k]; }
+            });
+            document.getElementById('plan-from-input').value = '';
+            document.getElementById('plan-to-input').value = '';
+            planFromData = null; planToData = null;
+            try {
+                localStorage.removeItem(PLAN_LS_KEY);
+                localStorage.setItem(ROUTE_OFF_KEY, '1');
+            } catch (e) { }
+            document.getElementById('planner-panel').classList.add('hidden');
+            showToast('Trip finished — route cleared');
+        }
+
         const startShared = () => {
             try {
                 if (!consumeSharedRoute()) {
-                    if (!restoreLastRoute()) loadDefaultRoute();
+                    let off = false;
+                    try { off = localStorage.getItem(ROUTE_OFF_KEY) === '1'; } catch (e) { }
+                    if (!off) {
+                        if (!restoreLastRoute()) loadDefaultRoute();
+                    }
                 }
             } catch (e) { console.warn('route restore failed', e); }
         };
@@ -4023,7 +4057,7 @@ ${pref ? `User preference: "${pref}"\n` : ''}Reply ONLY JSON: {"pick": <option i
         }
 
         document.getElementById('trip-start-btn').addEventListener('click', startTrip);
-        document.getElementById('nav-end-btn').addEventListener('click', endTrip);
+        document.getElementById('nav-end-btn').addEventListener('click', finishTrip);
         document.getElementById('nav-gps-btn').addEventListener('click', navRequestGps);
         document.getElementById('nav-next-btn').addEventListener('click', () => {
             if (navState && navState.legIdx >= navState.plan.best.legs.length) { navState.legIdx = 0; navRender(); }
