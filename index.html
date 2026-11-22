@@ -3047,6 +3047,30 @@ User request: ${q}`;
             return '';
         }
 
+        // seconds for one leg — used when the user hand-edits a distance
+        function legTimeSec(l) {
+            if (l.type === 'walk') return walkSec(l.km);
+            if (l.type === 'car') return sec(l.km, 30) + 300;
+            if (l.type === 'bus') return sec(l.km, BUS_KMH, 360);
+            return l.time || 0;
+        }
+
+        // recompute plan totals after a leg distance is edited by hand
+        function recomputePlanTimes(plan) {
+            const b = plan.best;
+            let transfers = 0, prevLine = null;
+            b.legs.forEach(l => {
+                if (l.type === 'ride') {
+                    if (prevLine && prevLine !== l.line) transfers++;
+                    prevLine = l.line;
+                }
+            });
+            b.transfers = transfers;
+            b.timeSec = b.legs.reduce((a, l) => a + legTimeSec(l), 0) + transfers * 240;
+            b.km = b.legs.reduce((a, l) => a + l.km, 0);
+            b.walkKm = b.legs.filter(l => l.type === 'walk').reduce((a, l) => a + l.km, 0);
+        }
+
         function renderPlan(plan) {
             const res = document.getElementById('plan-results');
             const b = plan.best;
@@ -3085,9 +3109,15 @@ User request: ${q}`;
                     <ol class="space-y-1">
             `;
             b.legs.forEach((l, i) => {
-                html += `<li class="flex gap-1.5 text-[11px] text-slate-700"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span>${legText(l)}</span></li>`;
+                const editable = (l.type === 'walk' || l.type === 'car');
+                if (editable) {
+                    const lt = l.type === 'walk' ? `Walk to ${l.to}` : `Drive to ${l.to}`;
+                    html += `<li class="flex gap-1.5 items-center text-[11px] text-slate-700"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span class="flex-1">${lt} • ≈${fmtTime(legTimeSec(l))}</span><input type="number" step="0.1" min="0" inputmode="decimal" data-leg-km="${i}" value="${l.km.toFixed(1)}" class="leg-km-input w-14 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 text-[11px] font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-sky-400" /><span class="text-[10px] text-slate-400 font-semibold">km</span></li>`;
+                } else {
+                    html += `<li class="flex gap-1.5 text-[11px] text-slate-700"><span class="font-extrabold text-slate-400 shrink-0">${i + 1}.</span><span>${legText(l)}</span></li>`;
+                }
             });
-            html += `</ol></div>`;
+            html += `</ol><div class="text-[9px] text-slate-400 pt-0.5">Wrong distance? Tap a km value to fix it — times update automatically.</div></div>`;
             const alts = plan.options.filter(o => o !== b);
             if (alts.length) {
                 html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Tap an option to preview it on the map</div>`;
@@ -3112,6 +3142,17 @@ User request: ${q}`;
                 btn.addEventListener('click', () => {
                     const opt = plan.options[Number(btn.dataset.planIdx)];
                     if (opt) selectPlanOption(opt);
+                });
+            });
+            res.querySelectorAll('.leg-km-input').forEach(inp => {
+                inp.addEventListener('change', () => {
+                    const leg = plan.best.legs[Number(inp.dataset.legKm)];
+                    const v = parseFloat(inp.value);
+                    if (!leg || !isFinite(v) || v < 0) { if (leg) inp.value = leg.km.toFixed(1); return; }
+                    leg.km = v;
+                    if (leg.type === 'car') leg.time = sec(v, 30) + 300;
+                    recomputePlanTimes(plan);
+                    renderPlan(plan);
                 });
             });
         }
