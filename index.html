@@ -2555,14 +2555,20 @@ User request: ${q}`;
             }
         }
 
-        function metroPlan(from, to, walkPenalty = 0, allowCar = true) {
+        // normalized adjacency key for penalty-based alternative search
+        const edgeKey = (a, b, line) => Math.min(a, b) + '|' + Math.max(a, b) + '|' + (line == null ? 'w' : line);
+
+        function metroPlan(from, to, walkPenalty = 0, allowCar = true, pre = null) {
             // Access = best way to reach each station (walk, bus feeder or car drop-off).
             // Egress = best way to leave each station toward the destination.
             // walkPenalty > 0 produces the "easy-on-feet" variant: the search
             // minimizes time + penalty*walking, avoiding needless walks.
             // allowCar=false gives the no-car-needed alternative.
-            const access = computeEndpointOptions(from, walkPenalty, allowCar);
-            const egress = reverseOptions(computeEndpointOptions(to, walkPenalty, allowCar));
+            // pre = { access, egress, edgePenalty } lets callers reuse computed
+            // endpoint options and bias the search away from used edges.
+            const access = pre ? pre.access : computeEndpointOptions(from, walkPenalty, allowCar);
+            const egress = pre ? pre.egress : reverseOptions(computeEndpointOptions(to, walkPenalty, allowCar));
+            const edgePenalty = pre ? pre.edgePenalty : null;
 
             const N = ALL_STATIONS.length;
             const distS = new Array(N).fill(Infinity); // penalized score — drives the search
@@ -2580,7 +2586,8 @@ User request: ${q}`;
                 const [d, u] = pq.shift();
                 if (d > distS[u]) continue;
                 for (const e of metroAdj[u]) {
-                    const w = e.time + (e.walk ? e.dist * walkPenalty : 0);
+                    const w = e.time + (e.walk ? e.dist * walkPenalty : 0) +
+                        (edgePenalty ? (edgePenalty.get(edgeKey(u, e.to, e.line)) || 0) : 0);
                     const nd = d + w;
                     if (nd < distS[e.to]) {
                         distS[e.to] = nd;
@@ -2655,6 +2662,52 @@ User request: ${q}`;
                 board: firstSt, alight: lastSt, lines: usedLines,
                 accessMode: access[entryIdx].mode, egressMode: egress[exitIdx].mode
             };
+        }
+
+        // Penalize every metro/walk edge used by a plan so the next search
+        // round is forced onto a different line combination.
+        function penalizePlanEdges(p, penalties, amount) {
+            p.legs.forEach(l => {
+                if (l.type === 'ride') {
+                    const lo = METRO_LINES[l.line];
+                    if (!lo) return;
+                    const names = lo.stations.map(s => s.name);
+                    const i1 = names.indexOf(l.from), i2 = names.indexOf(l.to);
+                    if (i1 < 0 || i2 < 0) return;
+                    const [a, b] = i1 < i2 ? [i1, i2] : [i2, i1];
+                    for (let i = a; i < b; i++) {
+                        const ka = stIndex[names[i]], kb = stIndex[names[i + 1]];
+                        if (ka === undefined || kb === undefined) continue;
+                        const key = edgeKey(ka, kb, l.line);
+                        penalties.set(key, (penalties.get(key) || 0) + amount);
+                    }
+                } else if (l.type === 'walk') {
+                    const ka = stIndex[l.from], kb = stIndex[l.to];
+                    if (ka === undefined || kb === undefined) return;
+                    const key = edgeKey(ka, kb, null);
+                    penalties.set(key, (penalties.get(key) || 0) + amount);
+                }
+            });
+        }
+
+        // Returns up to maxPlans distinct metro-based plans: the fastest, then
+        // alternatives forced onto different lines/stations by edge penalties.
+        function metroPlanVariants(from, to, walkPenalty, allowCar, maxPlans = 3) {
+            const access = computeEndpointOptions(from, walkPenalty, allowCar);
+            const egress = reverseOptions(computeEndpointOptions(to, walkPenalty, allowCar));
+            const pre = { access, egress, edgePenalty: null };
+            const out = [], seen = new Set(), penalties = new Map();
+            for (let k = 0; k < maxPlans; k++) {
+                pre.edgePenalty = penalties.size ? penalties : null;
+                const p = metroPlan(from, to, walkPenalty, allowCar, pre);
+                if (!p) break;
+                penalizePlanEdges(p, penalties, 300);
+                const sig = planSignature(p);
+                if (seen.has(sig)) continue;
+                seen.add(sig);
+                out.push(p);
+            }
+            return out;
         }
 
         // Bus stops indexed by route number
@@ -2825,8 +2878,8 @@ User request: ${q}`;
             return { idx: bi, dist: bd };
         }
 
-        function busPlan(from, to) {
-            let best = null;
+        function busPlanCandidates(from, to) {
+            const out = [];
             for (const b of BUS_CORRIDORS) {
                 const stops = BUS_STOPS_BY_ROUTE[b.no];
                 if (!stops || !stops.length) continue;
@@ -2849,22 +2902,38 @@ User request: ${q}`;
                 const walkIn = walkSec(bd1), walkOut = walkSec(bd2);
                 const rideT = sec(rideKm, BUS_KMH, 360); // +6 min wait/board
                 const total = walkIn + rideT + walkOut;
-                if (!best || total < best.timeSec) {
-                    best = {
-                        mode: 'bus',
-                        legs: [
-                            { type: 'walk', from: from.name, to: board.name, km: bd1 },
-                            { type: 'bus', route: b.no, routeName: b.name, color: b.color, from: board.name, to: alight.name, km: rideKm, time: rideT, geo: line.slice(lo, hi + 1) },
-                            { type: 'walk', from: alight.name, to: to.name, km: bd2 }
-                        ],
-                        timeSec: total,
-                        km: bd1 + rideKm + bd2,
-                        walkKm: bd1 + bd2,
-                        board, alight
-                    };
-                }
+                out.push({
+                    mode: 'bus',
+                    legs: [
+                        { type: 'walk', from: from.name, to: board.name, km: bd1 },
+                        { type: 'bus', route: b.no, routeName: b.name, color: b.color, from: board.name, to: alight.name, km: rideKm, time: rideT, geo: line.slice(lo, hi + 1) },
+                        { type: 'walk', from: alight.name, to: to.name, km: bd2 }
+                    ],
+                    timeSec: total,
+                    km: bd1 + rideKm + bd2,
+                    walkKm: bd1 + bd2,
+                    board, alight
+                });
             }
-            return best;
+            return out.sort((a, b) => a.timeSec - b.timeSec);
+        }
+
+        // Top maxN distinct bus routes, fastest first.
+        function busPlanVariants(from, to, maxN = 2) {
+            const seen = new Set(), out = [];
+            for (const p of busPlanCandidates(from, to)) {
+                const sig = planSignature(p);
+                if (seen.has(sig)) continue;
+                seen.add(sig);
+                out.push(p);
+                if (out.length >= maxN) break;
+            }
+            return out;
+        }
+
+        function busPlan(from, to) {
+            const c = busPlanCandidates(from, to);
+            return c.length ? c[0] : null;
         }
 
         function walkPlan(from, to) {
@@ -2904,10 +2973,12 @@ User request: ${q}`;
                 seen.add(sig);
                 options.push(p);
             };
-            push(metroPlan(from, to, 0, true));               // fastest overall (car drop-off allowed)
-            push(metroPlan(from, to, 0, false));              // fastest without a car
-            push(metroPlan(from, to, WALK_PENALTY_SEC, false));// easy-on-feet, no car needed
-            push(busPlan(from, to));
+            // up to 3 distinct metro plans per family — edge penalties force
+            // different line combinations / interchanges on each round
+            metroPlanVariants(from, to, 0, true, 3).forEach(push);   // car drop-off allowed
+            metroPlanVariants(from, to, 0, false, 3).forEach(push);  // no car needed
+            push(metroPlan(from, to, WALK_PENALTY_SEC, false));      // easy-on-feet, no car
+            busPlanVariants(from, to, 2).forEach(push);              // top 2 bus routes
             // fastest first; ties broken by least walking, then shortest distance
             options.sort((a, b) => (a.timeSec - b.timeSec) || (a.walkKm - b.walkKm) || (a.km - b.km));
             // sanity check: for short hops only keep transit that is dramatically
@@ -3024,10 +3095,12 @@ User request: ${q}`;
                 plan.options.forEach(o => { if (!leastWalk || o.walkKm < leastWalk.walkKm) leastWalk = o; });
                 alts.forEach(o => {
                     const idx = plan.options.indexOf(o);
-                    const lbl = { metro: 'Metro', mixed: 'Metro + Bus', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
+                    const lbl = { metro: 'Metro', mixed: 'Transit combo', drive: 'Drive + Metro', bus: 'Bus', walk: 'Walk' }[o.mode] || o.mode;
+                    const via = [...new Set(o.legs.filter(l => l.type === 'ride').map(l => METRO_LINES[l.line].shortName)),
+                        ...new Set(o.legs.filter(l => l.type === 'bus').map(l => 'BUS ' + l.route))].join(' + ');
                     const easyTag = (leastWalk === o && o.walkKm + 0.2 < b.walkKm) ? ' • least walking' : '';
                     const carTag = planHasCar(o) ? ' • needs car' : '';
-                    html += `<button type="button" data-plan-idx="${idx}" class="plan-alt-btn w-full flex justify-between items-center text-[11px] text-slate-600 hover:bg-sky-50 hover:text-sky-800 rounded-lg px-2 py-1.5 transition text-left"><span>${lbl}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}${carTag}${easyTag}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></button>`;
+                    html += `<button type="button" data-plan-idx="${idx}" class="plan-alt-btn w-full flex justify-between items-center text-[11px] text-slate-600 hover:bg-sky-50 hover:text-sky-800 rounded-lg px-2 py-1.5 transition text-left"><span>${lbl}${via ? ` <span class="text-slate-400">(${via})</span>` : ''}${o.walkKm > 0.3 ? ` • ${fmtKm(o.walkKm)} km walk` : ''}${carTag}${easyTag}</span><span class="font-semibold">${fmtTime(o.timeSec)} • ${fmtKm(o.km)} km</span></button>`;
                 });
             }
             res.innerHTML = html;
